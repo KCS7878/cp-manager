@@ -163,4 +163,13 @@ router.post('/api/backup/import', (ctx) =>
   }));
 router.get('/api/backup/list', () => ({ backups: backupSvc.listBackups() }));
 
+// ---- 학생 외부 데이터화 ----
+router.get('/api/students/:id/export', (ctx) => backupSvc.exportStudent(num(ctx.params.id)));
+router.get('/api/teachers/:id/students-csv', (ctx) => ({
+  __raw: true,
+  contentType: 'text/csv; charset=utf-8',
+  filename: `학생명단_${ctx.query.name || 'teacher'}.csv`,
+  data: backupSvc.exportStudentsCsv(num(ctx.params.id)),
+}));
+
 export default router;

@@ -143,3 +143,55 @@ export function listBackups() {
   const db = getDb();
   return db.prepare('SELECT * FROM backups ORDER BY id DESC LIMIT 50').all();
 }
+
+// ── 학생 단위 외부 데이터화 ──
+
+/** 한 학생의 모든 데이터를 사람이 읽기 쉬운 JSON으로 묶어 반환 */
+export function exportStudent(studentId) {
+  const db = getDb();
+  const student = db.prepare('SELECT * FROM students WHERE id = ?').get(studentId);
+  if (!student) throw new ValidationError('학생을 찾을 수 없습니다.');
+  const teacher = db.prepare('SELECT name FROM teachers WHERE id = ?').get(student.teacher_id);
+  const pick = (sql) => db.prepare(sql).all(studentId);
+  return {
+    meta: { exported_at: nowSeoulStamp(), type: 'single_student', version: 1 },
+    teacher: teacher ? teacher.name : null,
+    student,
+    override: db.prepare('SELECT * FROM student_cp_rules WHERE student_id = ?').get(studentId) || null,
+    lessons: pick('SELECT * FROM lessons WHERE student_id = ? ORDER BY lesson_date'),
+    exams: pick('SELECT * FROM exams WHERE student_id = ? ORDER BY exam_date'),
+    cp_ledger: pick('SELECT * FROM cp_ledger WHERE student_id = ? ORDER BY occurred_date'),
+    monthly_bonuses: pick('SELECT * FROM monthly_bonuses WHERE student_id = ? ORDER BY month_key'),
+    participation: pick('SELECT * FROM participation WHERE student_id = ? ORDER BY lesson_date'),
+    purchases: pick('SELECT * FROM purchases WHERE student_id = ? ORDER BY purchased_at'),
+  };
+}
+
+function csvEscape(v) {
+  if (v === null || v === undefined) return '';
+  const s = String(v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+/**
+ * 강사의 학생 명단을 CSV 문자열로 반환 (CP 잔액 포함).
+ * 엑셀에서 바로 열 수 있도록 UTF-8 BOM 포함.
+ */
+export function exportStudentsCsv(teacherId) {
+  const db = getDb();
+  // 지연 import 회피: ledger 계산은 직접 수행
+  const students = db.prepare('SELECT * FROM students WHERE teacher_id = ? AND archived = 0 ORDER BY name').all(teacherId);
+  const header = ['이름', '학교', '학년', '분반', '나이', '과목', '모의목표종류', '모의목표값', '내신목표종류', '내신목표값', '사용가능CP', '대기CP', '누적CP'];
+  const lines = [header.map(csvEscape).join(',')];
+  for (const s of students) {
+    const avail = db.prepare("SELECT COALESCE(SUM(amount),0) v FROM cp_ledger WHERE student_id=? AND status='available'").get(s.id).v;
+    const pending = db.prepare("SELECT COALESCE(SUM(amount),0) v FROM cp_ledger WHERE student_id=? AND status='pending'").get(s.id).v;
+    const cum = db.prepare("SELECT COALESCE(SUM(amount),0) v FROM cp_ledger WHERE student_id=? AND source_type!='purchase'").get(s.id).v;
+    lines.push([
+      s.name, s.school, s.grade, s.class_name, s.age, s.subject,
+      s.mock_goal_type, s.mock_goal_value, s.exam_goal_type, s.exam_goal_value,
+      avail, pending, cum,
+    ].map(csvEscape).join(','));
+  }
+  return '\uFEFF' + lines.join('\r\n'); // BOM + CRLF (엑셀 호환)
+}

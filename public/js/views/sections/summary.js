@@ -71,6 +71,7 @@ export function renderSummary(ctx) {
       ),
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn sm secondary', onClick: () => openStudentForm(s, ctxTeacher(), () => ctx.reload()) }, '수정'),
+        h('button', { class: 'btn sm secondary', onClick: () => exportStudentJson(s), title: '이 학생의 모든 기록을 JSON 파일로 저장' }, '⬇ 내보내기'),
         h('button', { class: 'btn sm danger', onClick: () => deleteStudent(ctx) }, '삭제'),
       )
     ),
@@ -154,6 +155,19 @@ function openManualCp(ctx) {
       footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '저장')],
     });
   });
+}
+
+async function exportStudentJson(s) {
+  try {
+    const data = await api.get(`/api/students/${s.id}/export`);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `학생_${s.name}_${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(`'${s.name}' 학생 데이터를 JSON으로 저장했습니다.`, 'success');
+  } catch (e) { toast('내보내기 실패: ' + e.message, 'error'); }
 }
 
 async function deleteStudent(ctx) {

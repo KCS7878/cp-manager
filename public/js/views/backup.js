@@ -21,6 +21,19 @@ export function openBackup(teacher) {
       } catch (e) { toast(e.message, 'error'); }
     };
 
+    const doCsv = () => {
+      if (!teacher) return;
+      // 서버가 파일 다운로드로 응답하므로 링크 이동 방식 사용
+      const url = `/api/teachers/${teacher.id}/students-csv?name=${encodeURIComponent(teacher.name)}`;
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `학생명단_${teacher.name}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      toast('학생 명단 CSV를 저장했습니다.', 'success');
+    };
+
     const doImport = async () => {
       const file = fileInp.files[0];
       if (!file) return toast('불러올 JSON 파일을 선택하세요.', 'error');
@@ -65,7 +78,11 @@ export function openBackup(teacher) {
         h('div', { class: 'field' }, h('label', {}, '범위'), scopeSel),
         h('h4', {}, '내보내기'),
         h('p', { class: 'muted' }, '학생·수업·출결·시험·CP장부·보너스·규칙·상품·구매·인벤토리·참여 기록을 JSON으로 저장합니다.'),
-        h('button', { class: 'btn', onClick: doExport }, '⬇ JSON 내보내기'),
+        h('div', { class: 'btn-row' },
+          h('button', { class: 'btn', onClick: doExport }, '⬇ 전체 JSON 내보내기'),
+          teacher ? h('button', { class: 'btn sage', onClick: doCsv }, '⬇ 학생 명단 CSV (엑셀)') : null,
+        ),
+        h('p', { class: 'muted', style: { marginTop: '0.4rem' } }, 'CSV는 엑셀·구글시트에서 바로 열 수 있는 학생 명단(이름·학교·학년·분반·CP 잔액)입니다.'),
         h('h4', { style: { marginTop: '1rem' } }, '불러오기 (복원)'),
         h('p', { class: 'muted' }, 'PC 프로그램에서 내보낸 JSON을 불러옵니다. 복원 전 현재 데이터를 자동 백업하고, 확인 후에만 덮어씁니다.'),
         fileInp,

@@ -119,6 +119,17 @@ async function handle(req, res) {
       }
       const query = Object.fromEntries(url.searchParams.entries());
       const result = await match.handler({ params: match.params, query, body, req });
+      // 원시 응답(파일 다운로드: CSV 등) 지원
+      if (result && result.__raw) {
+        const headers = { 'Content-Type': result.contentType || 'application/octet-stream' };
+        if (result.filename) {
+          headers['Content-Disposition'] = `attachment; filename*=UTF-8''${encodeURIComponent(result.filename)}`;
+        }
+        const buf = Buffer.from(result.data, 'utf8');
+        headers['Content-Length'] = buf.length;
+        res.writeHead(200, headers);
+        return res.end(buf);
+      }
       return sendJson(res, 200, result ?? { ok: true });
     } catch (err) {
       const { status, body } = mapError(err);
