@@ -57,7 +57,10 @@ export function renderDetail(pane, detail, App) {
   sections.guide = collapsibleSection('guide', '의의 및 규칙', () => renderGuideSection(ctx), { icon: '📜', subtitle: '학생 공유용 CP 운영 안내문' });
   sections.shop = collapsibleSection('shop', '상점 · 인벤토리', () => renderShop(ctx), { icon: '🛒', subtitle: '상품, 구매내역과 사용 기록' });
 
-  for (const k of SECTION_KEYS) pane.appendChild(sections[k]);
+  for (const k of SECTION_KEYS) {
+    sections[k].setAttribute('data-section', k);
+    pane.appendChild(sections[k]);
+  }
 }
 
 function expandAll(sections, expand) {
