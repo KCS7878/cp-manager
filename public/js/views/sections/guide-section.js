@@ -1,6 +1,6 @@
 import { h, clear, loadingEl, toast } from '../../ui.js';
 import { api } from '../../api.js';
-import { captureToPng } from '../../png.js';
+import { captureText } from '../../png.js';
 import { openGuideModal } from '../guide.js';
 import { state } from '../../state.js';
 
@@ -15,14 +15,17 @@ export function renderGuideSection(ctx) {
   load();
   return wrap;
 
+  let guideContent = '';
+
   async function load() {
     clear(view);
     view.appendChild(loadingEl());
     try {
       const { guide } = await api.get(`/api/teachers/${state.teacher.id}/guide`);
+      guideContent = guide.content || '';
       clear(view);
       const captureBox = h('div', { id: 'guideCapture', style: { background: '#fffdf8', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e5d8c4', whiteSpace: 'pre-wrap' }, class: 'wrap-anywhere' },
-        guide.content || '아직 안내문이 없습니다. “편집”에서 작성하거나 “기본 초안 생성”을 사용하세요.');
+        guideContent || '아직 안내문이 없습니다. “편집”에서 작성하거나 “기본 초안 생성”을 사용하세요.');
       view.appendChild(captureBox);
     } catch (e) {
       clear(view);
@@ -31,9 +34,10 @@ export function renderGuideSection(ctx) {
   }
 
   async function capture() {
-    const node = view.querySelector('#guideCapture');
-    if (!node) return;
-    try { await captureToPng(node, `CP매니저_의의규칙_${state.teacher.name}.png`, { background: '#fffdf8' }); toast('이미지를 저장했습니다.', 'success'); }
-    catch (e) { toast('이미지 저장 실패: ' + e.message, 'error'); }
+    if (!guideContent.trim()) { toast('먼저 안내문을 작성하세요.', 'error'); return; }
+    try {
+      await captureText('CP 매니저 의의 및 규칙', guideContent, `CP매니저_의의규칙_${state.teacher.name}.png`);
+      toast('이미지를 저장했습니다.', 'success');
+    } catch (e) { toast('이미지 저장 실패: ' + e.message, 'error'); }
   }
 }

@@ -1,6 +1,6 @@
 import { h, clear, openModal, modalShell, toast, loadingEl } from '../ui.js';
 import { api } from '../api.js';
-import { captureToPng } from '../png.js';
+import { captureRanking } from '../png.js';
 import { state } from '../state.js';
 
 export function openRanking(teacher) {
@@ -13,6 +13,7 @@ export function openRanking(teacher) {
 
     const body = h('div', {});
     const list = h('div', { id: 'rankCapture', style: { background: '#f8f2e7', padding: '0.5rem', borderRadius: '10px' } });
+    let lastData = null; // 캡처용
 
     async function load() {
       clear(list); list.appendChild(loadingEl());
@@ -25,6 +26,7 @@ export function openRanking(teacher) {
     }
 
     function paint(data) {
+      lastData = data;
       clear(list);
       list.appendChild(h('div', { style: { padding: '0.5rem 0.5rem 0.25rem', fontWeight: 800, fontSize: '1.05rem' } },
         `🏆 ${teacher.name} 선생님 TOP ${Math.min(10, data.rows.length)} · ${data.basis === 'monthly' ? '이번 달 (' + data.monthKey + ')' : '누적 CP'}`));
@@ -56,8 +58,30 @@ export function openRanking(teacher) {
     body.appendChild(list);
 
     async function capturePng() {
-      try { await captureToPng(list, `CP매니저_랭킹_${teacher.name}.png`, { background: '#f8f2e7' }); toast('이미지를 저장했습니다.', 'success'); }
-      catch (e) { toast('이미지 저장 실패: ' + e.message, 'error'); }
+      if (!lastData || !lastData.rows.length) { toast('저장할 랭킹 데이터가 없습니다.', 'error'); return; }
+      const top = lastData.rows.slice(0, 10).map((r) => {
+        const sym = [];
+        const s = r.symbols || {};
+        if (s.quarterTitle) sym.push({ text: s.quarterTitle, kind: 'title' });
+        if (s.perfectAttendance) sym.push({ text: '개근', kind: 'attend' });
+        if (lastData.toggles.dayStreak && s.dayStreak != null && s.dayStreak > 0) sym.push({ text: `STREAK ${s.dayStreak}`, kind: 'streak' });
+        if (s.perfectCount > 0) sym.push({ text: `PERFECT ${s.perfectCount}`, kind: 'perfect' });
+        return {
+          rank: r.rank,
+          name: r.name,
+          sub: [r.grade, r.school, r.class_name].filter(Boolean).join(' · '),
+          cp: r.cp,
+          symbols: sym,
+        };
+      });
+      try {
+        await captureRanking({
+          title: `${teacher.name} 선생님 TOP ${top.length}`,
+          subtitle: lastData.basis === 'monthly' ? `이번 달 획득 CP · ${lastData.monthKey}` : '누적 CP',
+          rows: top,
+        }, `CP매니저_랭킹_${teacher.name}.png`);
+        toast('이미지를 저장했습니다.', 'success');
+      } catch (e) { toast('이미지 저장 실패: ' + e.message, 'error'); }
     }
 
     load();

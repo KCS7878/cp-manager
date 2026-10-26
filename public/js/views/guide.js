@@ -1,6 +1,5 @@
 import { h, openModal, modalShell, toast } from '../ui.js';
 import { api } from '../api.js';
-import { captureToPng } from '../png.js';
 
 export function openGuideModal(teacher) {
   openModal(async (close) => {

@@ -90,21 +90,31 @@ a { color: var(--coral-dark); }
   overflow: hidden;
 }
 .section-head {
-  display: flex; align-items: center; gap: 0.5rem;
-  padding: 0.8rem 1rem; cursor: pointer; user-select: none;
-  background: linear-gradient(0deg, rgba(238,115,90,0.04), transparent);
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.95rem 1.15rem; cursor: pointer; user-select: none;
   border-bottom: 1px solid transparent;
 }
-.section-head:hover { background: rgba(238,115,90,0.07); }
-.section-head h2 { font-size: 1.05rem; margin: 0; flex: 1; }
+.section-head:hover { background: rgba(238,115,90,0.05); }
+.section-icon {
+  width: 38px; height: 38px; flex: none; border-radius: 11px;
+  background: rgba(238,115,90,0.12); display: flex; align-items: center; justify-content: center;
+  font-size: 1.15rem;
+}
+.section-titles { flex: 1; min-width: 0; }
+.section-head h2 { font-size: 1.05rem; margin: 0; display: flex; align-items: center; gap: 0.4rem; }
+.section-sub { font-size: 0.82rem; color: #8a94a1; margin-top: 0.1rem; }
+.section-toggle {
+  display: inline-flex; align-items: center; gap: 0.3rem; flex: none;
+  color: var(--coral); font-weight: 700; font-size: 0.86rem;
+}
 .section-head .toggle-icon { transition: transform 0.2s; color: var(--coral); font-weight: 700; }
 .card.collapsed .section-body { display: none; }
 .card:not(.collapsed) .section-head { border-bottom: 1px solid var(--border); }
 .card.collapsed .toggle-icon { transform: rotate(-90deg); }
-.section-body { padding: 1rem; }
+.section-body { padding: 1.15rem; }
 .section-badge {
-  font-size: 0.75rem; background: var(--orange); color: #fff;
-  padding: 0.1rem 0.5rem; border-radius: 999px; font-weight: 700;
+  font-size: 0.72rem; background: var(--orange); color: #fff;
+  padding: 0.05rem 0.5rem; border-radius: 999px; font-weight: 700; margin-left: 0.2rem;
 }
 
 /* ---------- 버튼 ---------- */
@@ -160,18 +170,39 @@ a { color: var(--coral-dark); }
 .cp-chip.pending { background: rgba(231,168,77,0.2); color: #9a6e1d; }
 
 /* ---------- 강사 선택 ---------- */
-.teacher-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
-.teacher-card {
-  border: 2px solid var(--border); border-radius: var(--radius); padding: 1.5rem 1rem;
-  text-align: center; cursor: pointer; background: var(--card-bg); transition: all 0.15s;
+.teacher-select-wrap { display: flex; justify-content: center; padding-top: 2.5vh; }
+.teacher-select-card { max-width: 600px; width: 100%; box-shadow: var(--shadow-lg); }
+.ts-brand { display: flex; align-items: center; gap: 0.7rem; }
+.ts-logo {
+  width: 46px; height: 46px; border-radius: 13px; background: linear-gradient(135deg, var(--coral), var(--orange));
+  color: #fff; font-weight: 800; font-size: 1.1rem; display: flex; align-items: center; justify-content: center;
 }
-.teacher-card:hover { border-color: var(--coral); transform: translateY(-2px); box-shadow: var(--shadow-lg); }
-.teacher-card .t-avatar {
-  width: 56px; height: 56px; border-radius: 50%; margin: 0 auto 0.6rem;
-  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.5rem; font-weight: 700;
+.ts-brand-title { font-weight: 800; font-size: 1.05rem; }
+.ts-brand-sub { font-size: 0.8rem; color: #8a94a1; }
+.ts-divider { height: 1px; background: var(--border); margin: 1rem 0; }
+.ts-eyebrow { color: var(--coral); font-weight: 700; font-size: 0.82rem; letter-spacing: 0.3px; }
+.ts-title { margin: 0.2rem 0 0.4rem; font-size: 1.5rem; }
+.ts-desc { margin: 0 0 1.1rem; }
+.teacher-select-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
+@media (max-width: 520px) { .teacher-select-grid { grid-template-columns: 1fr; } }
+.teacher-row-card {
+  display: flex; align-items: center; gap: 0.7rem; padding: 0.85rem 0.9rem;
+  border: 1px solid var(--border); border-radius: 13px; cursor: pointer; background: #fff; transition: all 0.14s;
 }
-.teacher-card .t-name { font-size: 1.15rem; font-weight: 700; }
-.teacher-card .t-count { font-size: 0.85rem; color: #6a7684; margin-top: 0.2rem; }
+.teacher-row-card:hover { border-color: var(--coral); background: #fffaf3; transform: translateY(-1px); box-shadow: var(--shadow); }
+.t-avatar {
+  width: 42px; height: 42px; border-radius: 11px; flex: none;
+  display: flex; align-items: center; justify-content: center; color: #fff; font-size: 1.15rem; font-weight: 700;
+}
+.t-info { flex: 1; min-width: 0; }
+.t-name { font-size: 1.02rem; font-weight: 700; }
+.t-count { font-size: 0.8rem; color: #8a94a1; margin-top: 0.05rem; }
+.t-arrow { color: var(--coral); font-size: 1.2rem; font-weight: 700; flex: none; }
+.ts-add-label { margin: 1.3rem 0 0.4rem; font-weight: 700; font-size: 0.85rem; color: #51606f; }
+.teacher-add-row { display: flex; gap: 0.5rem; }
+.teacher-add-input { flex: 1; padding: 0.55rem 0.7rem; border: 1px solid var(--border); border-radius: 10px; background: #fff; }
+.teacher-add-input:focus { outline: 3px solid rgba(238,115,90,0.3); border-color: var(--coral); }
+.ts-note { margin: 0.7rem 0 0; font-size: 0.78rem; }
 
 /* ---------- 요약 ---------- */
 .summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 0.6rem; }
@@ -183,6 +214,41 @@ a { color: var(--coral-dark); }
 .stat-box.avail .v { color: var(--sage); }
 .stat-box.pending .v { color: var(--orange); }
 .stat-box.cum .v { color: var(--coral); }
+
+/* 요약 3-패널 */
+.summary-panels { display: grid; grid-template-columns: 1.1fr 1.2fr 0.9fr; gap: 0.8rem; align-items: start; }
+@media (max-width: 1100px) { .summary-panels { grid-template-columns: 1fr; } }
+.sum-panel { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 0.95rem; }
+.sum-panel-title { font-weight: 700; font-size: 0.92rem; color: #51606f; margin-bottom: 0.65rem; padding-bottom: 0.5rem; border-bottom: 1px dashed var(--border); }
+.student-head { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem; flex-wrap: wrap; }
+.student-big-name { font-size: 1.3rem; font-weight: 800; }
+.grade-chip { background: rgba(120,151,122,0.18); color: #4d6650; font-size: 0.78rem; font-weight: 700; padding: 0.12rem 0.55rem; border-radius: 999px; }
+.info-row { display: flex; justify-content: space-between; gap: 0.5rem; padding: 0.3rem 0; font-size: 0.9rem; border-bottom: 1px solid #f3ecdf; }
+.info-row:last-of-type { border-bottom: none; }
+.info-k { color: #8a94a1; flex: none; }
+.info-v { font-weight: 600; text-align: right; }
+.goal-set { color: var(--coral-dark); font-weight: 700; }
+.goal-undecided { color: #b7a582; }
+.panel-actions { display: flex; gap: 0.4rem; margin-top: 0.7rem; }
+
+.cp-panel-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.7rem; flex-wrap: wrap; }
+.cp-three { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-bottom: 0.7rem; }
+.cp-box { border-radius: 12px; padding: 0.7rem 0.4rem; text-align: center; background: #faf4ea; border: 1px solid var(--border); }
+.cp-box-v { font-size: 1.5rem; font-weight: 800; }
+.cp-box-l { font-size: 0.74rem; color: #6a7684; margin-top: 0.1rem; }
+.cp-box.avail { background: rgba(120,151,122,0.1); } .cp-box.avail .cp-box-v { color: var(--sage); }
+.cp-box.pending { background: rgba(231,168,77,0.12); } .cp-box.pending .cp-box-v { color: #9a6e1d; }
+.cp-box.total.hl { background: rgba(120,151,122,0.16); } .cp-box.total .cp-box-v { color: var(--sage); }
+.cp-bar { height: 10px; background: #f0e6d4; border-radius: 999px; overflow: hidden; }
+.cp-bar-fill { height: 100%; background: linear-gradient(90deg, var(--sage), #9ab79c); border-radius: 999px; transition: width 0.4s; }
+.cp-bar-labels { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 0.4rem; font-size: 0.78rem; flex-wrap: wrap; }
+.cp-exchange { color: var(--coral-dark); font-weight: 700; }
+
+.quick-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+.qstat { text-align: center; padding: 0.6rem 0.3rem; border-radius: 12px; background: #faf4ea; border: 1px solid var(--border); }
+.qstat-v { font-size: 1.5rem; font-weight: 800; color: var(--navy); }
+.qstat-v.cum { color: var(--coral); }
+.qstat-l { font-size: 0.76rem; color: #6a7684; }
 
 /* ---------- 테이블 ---------- */
 .table-scroll { overflow-x: auto; }
