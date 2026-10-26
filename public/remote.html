@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>수업 참여 리모콘</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .remote-card { border:1px solid var(--border); border-radius:12px; padding:0.7rem; background:#fff; display:flex; align-items:center; gap:0.6rem; margin-bottom:0.5rem; flex-wrap:wrap; }
+    .remote-card .nm { flex:1; font-weight:700; min-width:90px; }
+    .stacks { display:flex; gap:0.25rem; }
+    .stack-dot { width:22px; height:22px; border-radius:50%; background:#eee5d5; display:flex; align-items:center; justify-content:center; font-size:0.7rem; font-weight:700; color:#b7a582; }
+    .stack-dot.on { background:var(--coral); color:#fff; }
+    .stack-dot.bonus { background:var(--sage); color:#fff; }
+  </style>
+</head>
+<body>
+  <div class="popup-page">
+    <h2 style="margin-top:0">🎮 수업 참여 리모콘</h2>
+    <div class="form-grid">
+      <div class="field"><label>분반</label><select id="classSel"></select></div>
+      <div class="field"><label>수업일</label><input type="date" id="dateInp" /></div>
+    </div>
+    <p class="muted">참여 +1 / 정정 -1. 한 수업일 최대 3회. 3회 달성 시 보너스 CP, 2회로 정정 시 회수됩니다.</p>
+    <div id="list"></div>
+    <div id="toast-area"></div>
+  </div>
+  <script type="module">
+    import { api } from '/js/api.js';
+    import { h, clear, toast } from '/js/ui.js';
+
+    const params = new URLSearchParams(location.search);
+    const teacherId = Number(params.get('teacher_id'));
+    const classSel = document.getElementById('classSel');
+    const dateInp = document.getElementById('dateInp');
+    const listEl = document.getElementById('list');
+    dateInp.value = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+
+    let rules = null;
+
+    async function loadClasses() {
+      const { classes } = await api.get(`/api/teachers/${teacherId}/classes`);
+      clear(classSel);
+      if (!classes.length) { classSel.appendChild(h('option', { value: '' }, '분반 없음')); return; }
+      for (const c of classes) classSel.appendChild(h('option', { value: c }, c));
+      await loadRoster();
+    }
+
+    async function loadRoster() {
+      const cls = classSel.value;
+      if (!cls) { listEl.innerHTML = '<div class="empty">분반이 없습니다. 메인에서 학생에 분반명을 지정하세요.</div>'; return; }
+      clear(listEl);
+      listEl.innerHTML = '<div class="loading-box">불러오는 중...</div>';
+      try {
+        const { students } = await api.get('/api/participation', { query: { teacher_id: teacherId, class_name: cls, lesson_date: dateInp.value } });
+        paint(students);
+      } catch (e) { listEl.innerHTML = ''; listEl.appendChild(h('div', { class: 'error-box' }, e.message)); }
+    }
+
+    function paint(students) {
+      clear(listEl);
+      if (!students.length) { listEl.appendChild(h('div', { class: 'empty' }, '해당 분반 학생이 없습니다.')); return; }
+      for (const s of students) listEl.appendChild(renderCard(s));
+    }
+
+    function renderCard(s) {
+      const dots = h('div', { class: 'stacks' });
+      for (let i = 1; i <= 3; i++) {
+        dots.appendChild(h('div', { class: 'stack-dot' + (s.stack >= i ? (i === 3 ? ' bonus' : ' on') : '') }, i === 3 ? '★' : i));
+      }
+      const card = h('div', { class: 'remote-card' },
+        h('div', { class: 'nm wrap-anywhere' }, s.name),
+        dots,
+        h('span', { class: 'muted' }, `${s.stack}회${s.bonus_given ? ' (+보너스)' : ''}`),
+        h('button', { class: 'btn sm', onClick: () => adjust(s, 1) }, '참여 +1'),
+        h('button', { class: 'btn sm secondary', onClick: () => adjust(s, -1) }, '정정 -1'));
+      return card;
+    }
+
+    async function adjust(s, delta) {
+      try {
+        const { result } = await api.post(`/api/students/${s.id}/participation`, { lesson_date: dateInp.value, delta });
+        if (result.bonus_given && delta > 0 && result.stack === 3) toast(`${s.name} 3회 달성! 보너스 CP 지급`, 'success');
+        if (!result.bonus_given && delta < 0 && result.stack === 2) toast(`${s.name} 보너스 CP 회수됨`, 'info');
+        await loadRoster();
+        if (window.opener && !window.opener.closed) window.opener.dispatchEvent(new CustomEvent('cp:data-changed', { detail: { studentId: s.id } }));
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    classSel.onchange = loadRoster;
+    dateInp.onchange = loadRoster;
+    loadClasses().catch((e) => toast('로딩 실패: ' + e.message, 'error'));
+  </script>
+</body>
+</html>

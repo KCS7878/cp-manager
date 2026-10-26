@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#ee735a" />
+  <title>CP 매니저</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⭐</text></svg>" />
+</head>
+<body>
+  <header class="app-header">
+    <h1>⭐ CP 매니저</h1>
+    <span id="teacherBadge"></span>
+    <span class="spacer"></span>
+    <button class="header-btn" id="btnWordWidget" title="단어 점수 간편 입력기">📝 단어 위젯</button>
+    <button class="header-btn" id="btnRemote" title="수업 참여 리모콘">🎮 참여 리모콘</button>
+    <button class="header-btn" id="btnRanking">🏆 랭킹</button>
+    <button class="header-btn" id="btnBackup">💾 백업</button>
+    <button class="header-btn" id="btnChangeTeacher" style="display:none">↩ 강사 변경</button>
+  </header>
+
+  <main class="container" id="app">
+    <div class="loading-box"><div class="spinner"></div>불러오는 중...</div>
+  </main>
+
+  <div id="modal-root"></div>
+  <div id="toast-area"></div>
+
+  <script type="module" src="/js/main.js"></script>
+</body>
+</html>

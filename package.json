@@ -1,0 +1,20 @@
+{
+  "name": "cp-manager",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CP 매니저 - 영어 강사용 학습 기록 및 Credit Point 관리 웹앱 (무의존성 Node.js + node:sqlite)",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "start": "node --experimental-sqlite scripts/start.js",
+    "serve": "node --experimental-sqlite server/index.js",
+    "dev": "node --experimental-sqlite --watch scripts/start.js",
+    "db:init": "node --experimental-sqlite scripts/db-init.js",
+    "db:seed": "node --experimental-sqlite scripts/db-seed.js",
+    "db:reset": "node --experimental-sqlite scripts/db-reset.js",
+    "test": "node --experimental-sqlite --test tests/*.test.js",
+    "smoke": "node --experimental-sqlite scripts/smoke-test.js"
+  }
+}

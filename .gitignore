@@ -1,0 +1,12 @@
+node_modules
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+public/uploads/*
+!public/uploads/.gitkeep
+backups/*.json
+.DS_Store
+*.log
+.env*.local
+coverage

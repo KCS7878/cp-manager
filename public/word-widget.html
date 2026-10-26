@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>단어 점수 간편 입력기</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="popup-page">
+    <h2 style="margin-top:0">📝 단어 점수 입력기</h2>
+    <p class="muted">강사 → 학생 → 시험일 순으로 입력하면 예상 CP를 확인하고 바로 저장할 수 있습니다.</p>
+    <div id="form"></div>
+    <div id="toast-area"></div>
+  </div>
+  <script type="module">
+    import { api } from '/js/api.js';
+    import { h, clear, toast } from '/js/ui.js';
+
+    const root = document.getElementById('form');
+    const field = (label, el, hint) => h('div', { class: 'field' }, h('label', {}, label), el, hint ? h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, hint) : null);
+    const sel = (opts, cur) => { const s = h('select'); for (const o of opts) { const [v, l] = o.split('|'); const op = h('option', { value: v }, l); if (v === cur) op.selected = true; s.appendChild(op); } return s; };
+    const today = () => new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+
+    let teachers = [], students = [], rules = null;
+
+    const teacherSel = sel([], '');
+    const studentSel = sel([], '');
+    const dateInp = h('input', { type: 'date', value: today() });
+    const modeSel = sel(['count|개수제', 'score|점수제'], 'count');
+    const seenInp = h('input', { type: 'number', min: '0', placeholder: '본 단어 수' });
+    const wrongInp = h('input', { type: 'number', min: '0', placeholder: '틀린 단어 수' });
+    const scoreInp = h('input', { type: 'number', min: '0', max: '100', placeholder: '점수' });
+    const rangeInp = h('input', { placeholder: '예: Day 20~21' });
+    const noShowChk = h('input', { type: 'checkbox' });
+    const deadlineSel = sel(['1|기한 내 준수', '0|기한 초과'], '1');
+    const estBox = h('div', { class: 'stat-box', style: { marginTop: '0.5rem' } });
+
+    const scoreFields = h('div', {});
+    function renderScoreFields() {
+      clear(scoreFields);
+      if (noShowChk.checked) { scoreFields.appendChild(h('div', { class: 'hint' }, '미응시 선택됨 — 점수 입력이 비활성화됩니다.')); return; }
+      if (modeSel.value === 'count') { scoreFields.appendChild(field('본 단어 수', seenInp)); scoreFields.appendChild(field('틀린 단어 수', wrongInp)); }
+      else { scoreFields.appendChild(field('본 단어 수', seenInp)); scoreFields.appendChild(field('점수 (0~100)', scoreInp)); }
+    }
+
+    function estimate() {
+      if (!rules) { estBox.textContent = ''; return; }
+      let cp = 0, label = '';
+      if (noShowChk.checked) { cp = rules.no_show_cp; label = '미응시'; }
+      else {
+        let score;
+        if (modeSel.value === 'count') { const s = Number(seenInp.value) || 0, wr = Number(wrongInp.value) || 0; score = s > 0 ? Math.round(((s - wr) / s) * 100) : 0; }
+        else score = Number(scoreInp.value) || 0;
+        const deadlineMet = deadlineSel.value === '1';
+        const passed = score >= rules.word_pass_score;
+        if (passed) { if (deadlineMet) { cp = rules.pass_in_time_cp + (score >= 100 ? rules.perfect_bonus_cp : 0); label = `통과 ${score}점`; } else { cp = rules.pass_late_cp; label = `기한초과 통과 ${score}점`; } }
+        else { cp = deadlineMet ? 0 : rules.pass_late_cp; label = `미통과 ${score}점`; }
+      }
+      estBox.innerHTML = '';
+      estBox.appendChild(h('div', { class: 'v', style: { color: cp >= 0 ? '#78977a' : '#c0392b' } }, (cp > 0 ? '+' : '') + cp + ' CP'));
+      estBox.appendChild(h('div', { class: 'l' }, '예상 CP · ' + label));
+    }
+
+    [modeSel, seenInp, wrongInp, scoreInp, deadlineSel].forEach((el) => el.addEventListener('input', () => { renderScoreFields(); estimate(); }));
+    modeSel.addEventListener('change', () => { renderScoreFields(); estimate(); });
+    noShowChk.addEventListener('change', () => { renderScoreFields(); estimate(); });
+
+    teacherSel.onchange = async () => { await loadStudents(); };
+    studentSel.onchange = async () => { await loadRules(); };
+
+    async function loadStudents() {
+      const tid = teacherSel.value;
+      const { students: st } = await api.get('/api/students', { query: { teacher_id: tid, scope: 'mine' } });
+      students = st;
+      clear(studentSel);
+      for (const s of students) studentSel.appendChild(h('option', { value: s.id }, `${s.name} (${s.grade || '-'})`));
+      await loadRules();
+    }
+    async function loadRules() {
+      const sid = studentSel.value;
+      if (!sid) return;
+      const student = students.find((s) => String(s.id) === String(sid));
+      if (student) modeSel.value = student.word_input_mode;
+      const { rules: r } = await api.get(`/api/teachers/${teacherSel.value}/rules`);
+      rules = r;
+      renderScoreFields(); estimate();
+    }
+
+    const saveBtn = h('button', { class: 'btn', style: { width: '100%', marginTop: '0.6rem' }, onClick: save }, '저장');
+
+    async function save() {
+      const sid = studentSel.value;
+      if (!sid) return toast('학생을 선택하세요.', 'error');
+      const body = {
+        lesson_date: dateInp.value,
+        word_status: noShowChk.checked ? 'noshow' : 'taken',
+        word_range: rangeInp.value,
+        deadline_met: Number(deadlineSel.value),
+        attendance: 'present',
+      };
+      if (!noShowChk.checked) {
+        if (modeSel.value === 'count') { body.word_seen = seenInp.value ? Number(seenInp.value) : null; body.word_wrong = wrongInp.value ? Number(wrongInp.value) : 0; }
+        else { body.word_seen = seenInp.value ? Number(seenInp.value) : null; body.word_score = scoreInp.value !== '' ? Number(scoreInp.value) : null; }
+      }
+      try {
+        await api.post(`/api/students/${sid}/lessons`, body);
+        toast('저장되었습니다. 메인 화면에 반영됩니다.', 'success');
+        if (window.opener && !window.opener.closed) {
+          window.opener.dispatchEvent(new CustomEvent('cp:data-changed', { detail: { studentId: Number(sid) } }));
+        }
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    root.appendChild(field('1. 강사', teacherSel));
+    root.appendChild(field('2. 학생', studentSel));
+    root.appendChild(field('3. 시험일', dateInp));
+    root.appendChild(field('4. 입력 방식', modeSel));
+    root.appendChild(scoreFields);
+    root.appendChild(field('7. 단어시험 범위 (자유 입력)', rangeInp));
+    root.appendChild(h('label', { style: { display: 'flex', gap: '0.4rem', alignItems: 'center', margin: '0.5rem 0' } }, noShowChk, '8. 미응시'));
+    root.appendChild(field('9. 마감 기한', deadlineSel));
+    root.appendChild(h('div', {}, h('label', { style: { fontSize: '0.85rem', fontWeight: 600 } }, '10. 예상 CP'), estBox));
+    root.appendChild(saveBtn);
+
+    (async () => {
+      try {
+        const { teachers: ts } = await api.get('/api/teachers');
+        teachers = ts;
+        for (const t of teachers) teacherSel.appendChild(h('option', { value: t.id }, t.name));
+        const last = Number(localStorage.getItem('cp.lastTeacher'));
+        if (last && teachers.find((t) => t.id === last)) teacherSel.value = String(last);
+        await loadStudents();
+      } catch (e) { toast('초기 로딩 실패: ' + e.message, 'error'); }
+    })();
+  </script>
+</body>
+</html>
