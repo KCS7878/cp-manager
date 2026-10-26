@@ -16,10 +16,30 @@ export function openStudentForm(student, teacher, onSaved) {
     f.age = h('input', { type: 'number', value: student?.age || '' });
     f.subject = h('input', { value: student?.subject || '영어' });
     f.word_input_mode = selEl(['count|개수제', 'score|점수제'], student?.word_input_mode || 'count');
+
+    // 목표값: 숫자만 입력. 종류(등급/점수)에 따라 단위·범위·placeholder 자동 조정.
+    const cleanNum = (v) => (v == null ? '' : String(v).replace(/[^0-9.]/g, ''));
     f.mock_goal_type = selEl(['undecided|미정', 'grade|등급', 'score|점수'], student?.mock_goal_type || 'undecided');
-    f.mock_goal_value = h('input', { value: student?.mock_goal_value || '', placeholder: '예: 2등급 / 85' });
+    f.mock_goal_value = h('input', { type: 'number', value: cleanNum(student?.mock_goal_value) });
     f.exam_goal_type = selEl(['undecided|미정', 'grade|등급', 'score|점수'], student?.exam_goal_type || 'undecided');
-    f.exam_goal_value = h('input', { value: student?.exam_goal_value || '' });
+    f.exam_goal_value = h('input', { type: 'number', value: cleanNum(student?.exam_goal_value) });
+
+    // 종류에 맞춰 목표값 입력 상태(placeholder/범위/비활성) 동기화
+    function syncGoal(typeSel, valInput) {
+      const t = typeSel.value;
+      if (t === 'undecided') {
+        valInput.value = '';
+        valInput.disabled = true;
+        valInput.placeholder = '미정';
+      } else {
+        valInput.disabled = false;
+        if (t === 'grade') { valInput.placeholder = '등급 (1~9)'; valInput.min = '1'; valInput.max = '9'; valInput.step = '1'; }
+        else { valInput.placeholder = '점수 (0~100)'; valInput.min = '0'; valInput.max = '100'; valInput.step = '1'; }
+      }
+    }
+    f.mock_goal_type.onchange = () => syncGoal(f.mock_goal_type, f.mock_goal_value);
+    f.exam_goal_type.onchange = () => syncGoal(f.exam_goal_type, f.exam_goal_value);
+    setTimeout(() => { syncGoal(f.mock_goal_type, f.mock_goal_value); syncGoal(f.exam_goal_type, f.exam_goal_value); }, 0);
 
     const schoolDatalist = h('datalist', { id: 'schoolList' },
       ...(state.schools || []).map((s) => h('option', { value: s.name })));
@@ -36,9 +56,9 @@ export function openStudentForm(student, teacher, onSaved) {
         subject: f.subject.value,
         word_input_mode: f.word_input_mode.value,
         mock_goal_type: f.mock_goal_type.value,
-        mock_goal_value: f.mock_goal_value.value,
+        mock_goal_value: f.mock_goal_type.value === 'undecided' ? '' : f.mock_goal_value.value,
         exam_goal_type: f.exam_goal_type.value,
-        exam_goal_value: f.exam_goal_value.value,
+        exam_goal_value: f.exam_goal_type.value === 'undecided' ? '' : f.exam_goal_value.value,
       };
       try {
         if (student) await api.put(`/api/students/${student.id}`, body);

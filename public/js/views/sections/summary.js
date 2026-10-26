@@ -6,8 +6,11 @@ export function renderSummary(ctx) {
   const s = ctx.student;
   const d = ctx.detail;
   const goalText = (type, val) => {
-    if (type === 'undecided' || !val) return h('span', { class: 'goal-undecided' }, '미정');
-    return h('span', { class: 'goal-set' }, type === 'grade' ? `${val}등급` : `${val}점`);
+    if (type === 'undecided' || val == null || val === '') return h('span', { class: 'goal-undecided' }, '미정');
+    // 기존에 '2등급' 처럼 단위까지 저장된 데이터 호환: 숫자만 추출 후 단위 1회만 부착
+    const num = String(val).replace(/[^0-9.]/g, '');
+    const display = num || String(val);
+    return h('span', { class: 'goal-set' }, type === 'grade' ? `${display}등급` : `${display}점`);
   };
 
   // 빠른 통계 계산
@@ -19,58 +22,74 @@ export function renderSummary(ctx) {
   const examAvg = schoolExams.length ? (schoolExams.reduce((a, e) => a + e.score, 0) / schoolExams.length).toFixed(1) : '-';
   const lastLesson = lessons.map((l) => l.lesson_date).sort().slice(-1)[0];
 
-  const wrap = h('div', { class: 'summary-panels' });
+  const wrap = h('div', { class: 'summary-v2' });
 
-  // ── 패널 1: 학생 정보 ──
-  wrap.appendChild(panel('학생 정보 · ' + (ctxTeacher()?.name || ''),
-    h('div', {},
-      h('div', { class: 'student-head' },
-        h('span', { class: 'student-big-name wrap-anywhere' }, s.name),
-        s.grade ? h('span', { class: 'grade-chip' }, s.grade) : null,
-      ),
-      infoRow('학교', s.school || '-'),
-      infoRow('과목', s.subject || '-'),
-      infoRow('담당 강사', ctxTeacher()?.name || '-'),
-      infoRow('분반', s.class_name || '-'),
-      infoRow('나이', s.age ? `${s.age}세` : '-'),
-      infoRow('최근 수업', lastLesson || '-'),
-      h('div', { class: 'info-row' }, h('span', { class: 'info-k' }, '모의 목표'), h('span', { class: 'info-v' }, goalText(s.mock_goal_type, s.mock_goal_value))),
-      h('div', { class: 'info-row' }, h('span', { class: 'info-k' }, '내신 목표'), h('span', { class: 'info-v' }, goalText(s.exam_goal_type, s.exam_goal_value))),
-      h('div', { class: 'panel-actions' },
-        h('button', { class: 'btn sm secondary', onClick: () => openStudentForm(s, ctxTeacher(), () => ctx.reload()) }, '수정'),
-        h('button', { class: 'btn sm danger', onClick: () => deleteStudent(ctx) }, '학생 삭제'),
-      )
-    )
-  ));
-
-  // ── 패널 2: CP 포인트 ──
+  // ══ HERO: CP 포인트 (크게·직관적) ══
   const total = s.available_cp + s.pending_cp;
   const availPct = total > 0 ? Math.round((s.available_cp / total) * 100) : 0;
-  wrap.appendChild(panel('CP 포인트',
-    h('div', {},
-      h('div', { class: 'cp-panel-head' },
-        h('span', { class: 'muted' }, '월별 사용 가능 현황'),
-        h('div', { class: 'btn-row' },
-          h('button', { class: 'btn sm ghost', onClick: () => openLedgerJump() }, '지급 내역'),
-          h('button', { class: 'btn sm orange', onClick: () => openManualCp(ctx) }, 'CP 지급'),
-        )
-      ),
-      h('div', { class: 'cp-three' },
-        cpBox('avail', s.available_cp, '현재 사용 가능'),
-        cpBox('pending', s.pending_cp, '대기 CP'),
-        cpBox('total', s.available_cp + s.cumulative_cp >= 0 ? (s.available_cp + s.pending_cp) : 0, '다음 달 사용 가능', true),
-      ),
-      h('div', { class: 'cp-bar' }, h('div', { class: 'cp-bar-fill', style: { width: availPct + '%' } })),
-      h('div', { class: 'cp-bar-labels' },
-        h('span', { class: 'muted' }, '이번 달 적립 CP는 다음 달 1일부터 사용 가능'),
-        h('span', { class: 'cp-exchange' }, s.available_cp > 0 ? '상품 교환 가능' : '교환 가능 CP 부족'),
+  const nextMonthAvail = s.available_cp + s.pending_cp; // 다음 달 1일이면 대기분이 가용으로
+
+  wrap.appendChild(h('div', { class: 'cp-hero' },
+    h('div', { class: 'cp-hero-head' },
+      h('span', { class: 'cp-hero-title' }, 'CP 포인트'),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn sm ghost', onClick: openLedgerJump }, '지급 내역'),
+        h('button', { class: 'btn sm orange', onClick: () => openManualCp(ctx) }, '＋ CP 지급'),
       )
+    ),
+    // 메인: 현재 사용 가능 CP 대형 표시
+    h('div', { class: 'cp-hero-main' },
+      h('div', { class: 'cp-hero-big' },
+        h('span', { class: 'cp-hero-num' }, String(s.available_cp)),
+        h('span', { class: 'cp-hero-unit' }, 'CP'),
+      ),
+      h('div', { class: 'cp-hero-caption' }, '지금 바로 사용 가능'),
+      h('span', { class: 'cp-exchange-badge' + (s.available_cp > 0 ? '' : ' off') },
+        s.available_cp > 0 ? '🎁 상품 교환 가능' : '교환 가능 CP 부족'),
+    ),
+    // 보조 지표 2개
+    h('div', { class: 'cp-hero-sub' },
+      subMetric('pending', s.pending_cp, '대기 CP', '이번 달 적립분'),
+      subMetric('next', nextMonthAvail, '다음 달 사용 가능', '매달 1일 전환'),
+    ),
+    h('div', { class: 'cp-bar' }, h('div', { class: 'cp-bar-fill', style: { width: availPct + '%' } })),
+    h('div', { class: 'cp-bar-labels' },
+      h('span', { class: 'muted' }, `사용 가능 ${s.available_cp} · 대기 ${s.pending_cp}`),
+      h('span', { class: 'muted' }, '대기 CP는 다음 달 1일부터 사용 가능'),
     )
   ));
 
-  // ── 패널 3: 빠른 통계 ──
-  wrap.appendChild(panel('빠른 통계',
-    h('div', { class: 'quick-stats' },
+  // ══ 하단: 학생 정보(축약) + 빠른 통계 (작게) ══
+  const bottom = h('div', { class: 'summary-bottom' });
+
+  // 학생 정보 (축약형)
+  bottom.appendChild(h('div', { class: 'mini-panel' },
+    h('div', { class: 'mini-panel-head' },
+      h('div', { class: 'student-head' },
+        h('span', { class: 'student-mini-name wrap-anywhere' }, s.name),
+        s.grade ? h('span', { class: 'grade-chip' }, s.grade) : null,
+      ),
+      h('div', { class: 'btn-row' },
+        h('button', { class: 'btn sm secondary', onClick: () => openStudentForm(s, ctxTeacher(), () => ctx.reload()) }, '수정'),
+        h('button', { class: 'btn sm danger', onClick: () => deleteStudent(ctx) }, '삭제'),
+      )
+    ),
+    h('div', { class: 'mini-info-grid' },
+      miniInfo('학교', s.school || '-'),
+      miniInfo('분반', s.class_name || '-'),
+      miniInfo('과목', s.subject || '-'),
+      miniInfo('나이', s.age ? `${s.age}세` : '-'),
+      miniInfo('담당 강사', ctxTeacher()?.name || '-'),
+      miniInfo('최근 수업', lastLesson || '-'),
+      h('div', { class: 'mini-info' }, h('span', { class: 'mini-k' }, '모의 목표'), h('span', { class: 'mini-v' }, goalText(s.mock_goal_type, s.mock_goal_value))),
+      h('div', { class: 'mini-info' }, h('span', { class: 'mini-k' }, '내신 목표'), h('span', { class: 'mini-v' }, goalText(s.exam_goal_type, s.exam_goal_value))),
+    )
+  ));
+
+  // 빠른 통계 (작게)
+  bottom.appendChild(h('div', { class: 'mini-panel' },
+    h('div', { class: 'mini-panel-title' }, '빠른 통계'),
+    h('div', { class: 'quick-stats-mini' },
       quickStat(lessonCount, '누적 수업'),
       quickStat(wordAvg, '단어 평균'),
       quickStat(examAvg, '내신 평균'),
@@ -78,24 +97,30 @@ export function renderSummary(ctx) {
     )
   ));
 
+  wrap.appendChild(bottom);
   return wrap;
 
-  function panel(title, bodyEl) {
-    return h('div', { class: 'sum-panel' }, h('div', { class: 'sum-panel-title' }, title), bodyEl);
+  function subMetric(cls, v, label, note) {
+    return h('div', { class: `cp-submetric ${cls}` },
+      h('div', { class: 'cp-submetric-v' }, String(v)),
+      h('div', { class: 'cp-submetric-l' }, label),
+      h('div', { class: 'cp-submetric-note' }, note));
   }
-  function infoRow(k, v) {
-    return h('div', { class: 'info-row' }, h('span', { class: 'info-k' }, k), h('span', { class: 'info-v wrap-anywhere' }, v));
+  function miniInfo(k, v) {
+    return h('div', { class: 'mini-info' }, h('span', { class: 'mini-k' }, k), h('span', { class: 'mini-v wrap-anywhere' }, v));
   }
-  function cpBox(cls, v, l, highlight) {
-    return h('div', { class: `cp-box ${cls}` + (highlight ? ' hl' : '') }, h('div', { class: 'cp-box-v' }, v), h('div', { class: 'cp-box-l' }, l));
-  }
+
   function quickStat(v, l, cls) {
     return h('div', { class: 'qstat' }, h('div', { class: 'qstat-v ' + (cls || '') }, v), h('div', { class: 'qstat-l' }, l));
   }
   function openLedgerJump() {
-    const card = document.querySelector('.card.collapsed');
-    // 지급 내역 섹션 펼치기 시도
-    toast('“CP 지급 내역” 섹션에서 전체 내역을 볼 수 있습니다.', 'info');
+    const card = document.querySelector('[data-section="ledger"]');
+    if (card && card.__expand) {
+      card.__expand();
+      card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } else {
+      toast('“CP 지급 내역” 섹션에서 전체 내역을 볼 수 있습니다.', 'info');
+    }
   }
 }
 
