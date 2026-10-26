@@ -11,119 +11,120 @@ import {
   ValidationError,
 } from '../lib/validation.js';
 
-export function listTeachers() {
+export async function listTeachers() {
   const db = getDb();
-  return db
-    .prepare(
-      `SELECT t.*, (SELECT COUNT(*) FROM students s WHERE s.teacher_id = t.id AND s.archived = 0) AS student_count
-       FROM teachers t ORDER BY t.id`
-    )
-    .all();
+  return db.all(
+    `SELECT t.*, (SELECT COUNT(*) FROM students s WHERE s.teacher_id = t.id AND s.archived = 0) AS student_count
+       FROM teachers t ORDER BY t.id`,
+    []
+  );
 }
 
-export function getTeacher(id) {
+export async function getTeacher(id) {
   const db = getDb();
-  const row = db.prepare('SELECT * FROM teachers WHERE id = ?').get(id);
+  const row = await db.get('SELECT * FROM teachers WHERE id = ?', [id]);
   if (!row) throw new NotFoundError('강사를 찾을 수 없습니다.');
   return row;
 }
 
-export function createTeacher(body) {
-  return transaction((db) => {
+export async function createTeacher(body) {
+  return transaction(async (db) => {
     const name = requireString(body.name, '강사명', { max: 60 });
     const color = optString(body.color, '색상', { max: 20 }) || '#ee735a';
     const stamp = nowSeoulStamp();
-    const info = db
-      .prepare('INSERT INTO teachers (name, color, created_at) VALUES (?, ?, ?)')
-      .run(name, color, stamp);
+    const info = await db.run(
+      'INSERT INTO teachers (name, color, created_at) VALUES (?, ?, ?)',
+      [name, color, stamp]
+    );
     const id = Number(info.lastInsertRowid);
-    getTeacherRules(db, id); // 기본 규칙 생성
-    db.prepare('INSERT INTO guides (teacher_id, content, updated_at) VALUES (?, ?, ?)').run(
+    await getTeacherRules(db, id); // 기본 규칙 생성
+    await db.run('INSERT INTO guides (teacher_id, content, updated_at) VALUES (?, ?, ?)', [
       id,
       '',
-      stamp
-    );
-    return db.prepare('SELECT * FROM teachers WHERE id = ?').get(id);
+      stamp,
+    ]);
+    return db.get('SELECT * FROM teachers WHERE id = ?', [id]);
   });
 }
 
-export function updateTeacher(id, body) {
-  return transaction((db) => {
-    const existing = db.prepare('SELECT * FROM teachers WHERE id = ?').get(id);
+export async function updateTeacher(id, body) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM teachers WHERE id = ?', [id]);
     if (!existing) throw new NotFoundError('강사를 찾을 수 없습니다.');
     const name = body.name !== undefined ? requireString(body.name, '강사명', { max: 60 }) : existing.name;
     const color = body.color !== undefined ? requireString(body.color, '색상', { max: 20 }) : existing.color;
-    db.prepare('UPDATE teachers SET name = ?, color = ? WHERE id = ?').run(name, color, id);
-    return db.prepare('SELECT * FROM teachers WHERE id = ?').get(id);
+    await db.run('UPDATE teachers SET name = ?, color = ? WHERE id = ?', [name, color, id]);
+    return db.get('SELECT * FROM teachers WHERE id = ?', [id]);
   });
 }
 
-export function deleteTeacher(id) {
-  return transaction((db) => {
-    const existing = db.prepare('SELECT * FROM teachers WHERE id = ?').get(id);
+export async function deleteTeacher(id) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM teachers WHERE id = ?', [id]);
     if (!existing) throw new NotFoundError('강사를 찾을 수 없습니다.');
     // ON DELETE CASCADE가 학생/규칙/상품 등 연관 데이터 정리
-    db.prepare('DELETE FROM teachers WHERE id = ?').run(id);
+    await db.run('DELETE FROM teachers WHERE id = ?', [id]);
     return { deleted: true };
   });
 }
 
 // ---- 학교 ----
-export function listSchools(teacherId) {
+export async function listSchools(teacherId) {
   const db = getDb();
-  return db.prepare('SELECT * FROM schools WHERE teacher_id = ? ORDER BY name').all(teacherId);
+  return db.all('SELECT * FROM schools WHERE teacher_id = ? ORDER BY name', [teacherId]);
 }
 
-export function createSchool(teacherId, body) {
-  return transaction((db) => {
+export async function createSchool(teacherId, body) {
+  return transaction(async (db) => {
     const name = requireString(body.name, '학교명', { max: 60 });
     const level = requireEnum(body.level || 'etc', '학교급', ['middle', 'high', 'etc']);
-    const info = db
-      .prepare('INSERT INTO schools (teacher_id, name, level, created_at) VALUES (?, ?, ?, ?)')
-      .run(teacherId, name, level, nowSeoulStamp());
-    return db.prepare('SELECT * FROM schools WHERE id = ?').get(Number(info.lastInsertRowid));
+    const info = await db.run(
+      'INSERT INTO schools (teacher_id, name, level, created_at) VALUES (?, ?, ?, ?)',
+      [teacherId, name, level, nowSeoulStamp()]
+    );
+    return db.get('SELECT * FROM schools WHERE id = ?', [Number(info.lastInsertRowid)]);
   });
 }
 
-export function deleteSchool(id) {
-  return transaction((db) => {
-    db.prepare('DELETE FROM schools WHERE id = ?').run(id);
+export async function deleteSchool(id) {
+  return transaction(async (db) => {
+    await db.run('DELETE FROM schools WHERE id = ?', [id]);
     return { deleted: true };
   });
 }
 
 // ---- 의의 및 규칙 안내문 ----
-export function getGuide(teacherId) {
+export async function getGuide(teacherId) {
   const db = getDb();
-  let row = db.prepare('SELECT * FROM guides WHERE teacher_id = ?').get(teacherId);
+  let row = await db.get('SELECT * FROM guides WHERE teacher_id = ?', [teacherId]);
   if (!row) {
-    db.prepare('INSERT INTO guides (teacher_id, content, updated_at) VALUES (?, ?, ?)').run(
+    await db.run('INSERT INTO guides (teacher_id, content, updated_at) VALUES (?, ?, ?)', [
       teacherId,
       '',
-      nowSeoulStamp()
-    );
-    row = db.prepare('SELECT * FROM guides WHERE teacher_id = ?').get(teacherId);
+      nowSeoulStamp(),
+    ]);
+    row = await db.get('SELECT * FROM guides WHERE teacher_id = ?', [teacherId]);
   }
   return row;
 }
 
-export function updateGuide(teacherId, content) {
-  return transaction((db) => {
+export async function updateGuide(teacherId, content) {
+  return transaction(async (db) => {
     if (typeof content !== 'string') throw new ValidationError('내용은 문자열이어야 합니다.');
     if (content.length > 12000) throw new ValidationError('안내문은 최대 12,000자까지 가능합니다.');
-    db.prepare('INSERT INTO guides (teacher_id, content, updated_at) VALUES (?, ?, ?) ON CONFLICT(teacher_id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at').run(
+    await db.run('INSERT INTO guides (teacher_id, content, updated_at) VALUES (?, ?, ?) ON CONFLICT(teacher_id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at', [
       teacherId,
       content,
-      nowSeoulStamp()
-    );
-    return db.prepare('SELECT * FROM guides WHERE teacher_id = ?').get(teacherId);
+      nowSeoulStamp(),
+    ]);
+    return db.get('SELECT * FROM guides WHERE teacher_id = ?', [teacherId]);
   });
 }
 
 /** 규칙을 반영한 안내문 기본 초안 생성 */
-export function generateGuideDraft(teacherId) {
+export async function generateGuideDraft(teacherId) {
   const db = getDb();
-  const r = getTeacherRules(db, teacherId);
+  const r = await getTeacherRules(db, teacherId);
   return `# CP 매니저의 의의 및 규칙
 
 ## 1. CP 매니저의 목적

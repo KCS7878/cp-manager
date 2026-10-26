@@ -20,20 +20,21 @@ const RULE_NUMERIC_FIELDS = [
 const RULE_TOGGLE_FIELDS = ['show_quarter_title', 'show_perfect_attend', 'show_day_streak'];
 
 /** 강사 규칙 조회 (없으면 기본값으로 생성) */
-export function getTeacherRules(db, teacherId) {
-  let row = db.prepare('SELECT * FROM cp_rules WHERE teacher_id = ?').get(teacherId);
+export async function getTeacherRules(db, teacherId) {
+  let row = await db.get('SELECT * FROM cp_rules WHERE teacher_id = ?', [teacherId]);
   if (!row) {
-    db.prepare(
-      `INSERT INTO cp_rules (teacher_id, updated_at) VALUES (?, ?)`
-    ).run(teacherId, nowSeoulStamp());
-    row = db.prepare('SELECT * FROM cp_rules WHERE teacher_id = ?').get(teacherId);
+    await db.run(
+      `INSERT INTO cp_rules (teacher_id, updated_at) VALUES (?, ?)`,
+      [teacherId, nowSeoulStamp()]
+    );
+    row = await db.get('SELECT * FROM cp_rules WHERE teacher_id = ?', [teacherId]);
   }
   return row;
 }
 
-export function updateTeacherRules(teacherId, patch) {
-  return transaction((db) => {
-    getTeacherRules(db, teacherId); // ensure exists
+export async function updateTeacherRules(teacherId, patch) {
+  return transaction(async (db) => {
+    await getTeacherRules(db, teacherId); // ensure exists
     const sets = [];
     const vals = [];
     for (const f of RULE_NUMERIC_FIELDS) {
@@ -52,25 +53,26 @@ export function updateTeacherRules(teacherId, patch) {
       sets.push('updated_at = ?');
       vals.push(nowSeoulStamp());
       vals.push(teacherId);
-      db.prepare(`UPDATE cp_rules SET ${sets.join(', ')} WHERE teacher_id = ?`).run(...vals);
+      await db.run(`UPDATE cp_rules SET ${sets.join(', ')} WHERE teacher_id = ?`, [...vals]);
     }
-    return db.prepare('SELECT * FROM cp_rules WHERE teacher_id = ?').get(teacherId);
+    return db.get('SELECT * FROM cp_rules WHERE teacher_id = ?', [teacherId]);
   });
 }
 
 /** 학생 예외 규칙 조회 (없으면 null) */
-export function getStudentOverride(db, studentId) {
-  return db.prepare('SELECT * FROM student_cp_rules WHERE student_id = ?').get(studentId) || null;
+export async function getStudentOverride(db, studentId) {
+  return (await db.get('SELECT * FROM student_cp_rules WHERE student_id = ?', [studentId])) || null;
 }
 
-export function updateStudentOverride(studentId, patch) {
-  return transaction((db) => {
-    const existing = getStudentOverride(db, studentId);
+export async function updateStudentOverride(studentId, patch) {
+  return transaction(async (db) => {
+    const existing = await getStudentOverride(db, studentId);
     const fields = RULE_NUMERIC_FIELDS.filter((f) => f !== 'participation_stack3_cp');
     if (!existing) {
-      db.prepare(
-        'INSERT INTO student_cp_rules (student_id, updated_at) VALUES (?, ?)'
-      ).run(studentId, nowSeoulStamp());
+      await db.run(
+        'INSERT INTO student_cp_rules (student_id, updated_at) VALUES (?, ?)',
+        [studentId, nowSeoulStamp()]
+      );
     }
     const sets = [];
     const vals = [];
@@ -85,7 +87,7 @@ export function updateStudentOverride(studentId, patch) {
       sets.push('updated_at = ?');
       vals.push(nowSeoulStamp());
       vals.push(studentId);
-      db.prepare(`UPDATE student_cp_rules SET ${sets.join(', ')} WHERE student_id = ?`).run(...vals);
+      await db.run(`UPDATE student_cp_rules SET ${sets.join(', ')} WHERE student_id = ?`, [...vals]);
     }
     return getStudentOverride(db, studentId);
   });
@@ -94,8 +96,8 @@ export function updateStudentOverride(studentId, patch) {
 /**
  * 학생에게 적용되는 effective 규칙(강사+예외 병합).
  */
-export function getEffectiveRules(db, teacherId, studentId) {
-  const teacherRules = { ...DEFAULT_RULES, ...getTeacherRules(db, teacherId) };
-  const override = studentId ? getStudentOverride(db, studentId) : null;
+export async function getEffectiveRules(db, teacherId, studentId) {
+  const teacherRules = { ...DEFAULT_RULES, ...(await getTeacherRules(db, teacherId)) };
+  const override = studentId ? await getStudentOverride(db, studentId) : null;
   return mergeRules(teacherRules, override);
 }

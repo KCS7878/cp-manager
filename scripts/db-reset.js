@@ -1,9 +1,8 @@
 // DB 완전 초기화: 파일 삭제 후 재생성 + 시드.
 import fs from 'node:fs';
-import { getDbPath, closeDb } from '../server/db/connection.js';
+import { getDbPath } from '../server/db/local-db.js';
 
 const dbPath = getDbPath();
-closeDb();
 for (const suffix of ['', '-wal', '-shm', '-journal']) {
   const f = dbPath + suffix;
   if (fs.existsSync(f)) fs.rmSync(f);

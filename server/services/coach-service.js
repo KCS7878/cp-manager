@@ -18,15 +18,16 @@ import { NotFoundError } from '../lib/validation.js';
  *   insufficient: bool, needData: [...]
  * }
  */
-export function coachAnalyze(studentId) {
+export async function coachAnalyze(studentId) {
   const db = getDb();
-  const student = db.prepare('SELECT * FROM students WHERE id = ?').get(studentId);
+  const student = await db.get('SELECT * FROM students WHERE id = ?', [studentId]);
   if (!student) throw new NotFoundError('학생을 찾을 수 없습니다.');
 
-  const lessons = db
-    .prepare('SELECT * FROM lessons WHERE student_id = ? ORDER BY lesson_date ASC, id ASC')
-    .all(studentId);
-  const exams = analyzeExams(studentId);
+  const lessons = await db.all(
+    'SELECT * FROM lessons WHERE student_id = ? ORDER BY lesson_date ASC, id ASC',
+    [studentId]
+  );
+  const exams = await analyzeExams(studentId);
 
   const facts = [];
   const problems = [];

@@ -18,15 +18,16 @@ import {
 const ATTENDANCE = ['present', 'late', 'absent'];
 const WORD_STATUS = ['none', 'taken', 'noshow', 'etc'];
 
-export function listLessons(studentId, limit = 300) {
+export async function listLessons(studentId, limit = 300) {
   const db = getDb();
-  return db
-    .prepare('SELECT * FROM lessons WHERE student_id = ? ORDER BY lesson_date DESC, id DESC LIMIT ?')
-    .all(studentId, limit);
+  return db.all(
+    'SELECT * FROM lessons WHERE student_id = ? ORDER BY lesson_date DESC, id DESC LIMIT ?',
+    [studentId, limit]
+  );
 }
 
-function parseLessonBody(db, studentId, body, existing = {}) {
-  const student = db.prepare('SELECT * FROM students WHERE id = ?').get(studentId);
+async function parseLessonBody(db, studentId, body, existing = {}) {
+  const student = await db.get('SELECT * FROM students WHERE id = ?', [studentId]);
   if (!student) throw new NotFoundError('학생을 찾을 수 없습니다.');
 
   const attendance = body.attendance !== undefined
@@ -87,12 +88,12 @@ function parseLessonBody(db, studentId, body, existing = {}) {
 }
 
 /** 수업 기록의 CP 장부를 재생성 (기존 효과 제거 후 재계산) */
-function recomputeLessonLedger(db, lesson) {
-  removeLedgerBySource(db, 'lesson', lesson.id);
-  const rules = getEffectiveRules(db, lesson.teacher_id, lesson.student_id);
+async function recomputeLessonLedger(db, lesson) {
+  await removeLedgerBySource(db, 'lesson', lesson.id);
+  const rules = await getEffectiveRules(db, lesson.teacher_id, lesson.student_id);
   const entries = computeLessonLedgerEntries(rules, lesson);
   for (const e of entries) {
-    addLedgerEntry(db, {
+    await addLedgerEntry(db, {
       studentId: lesson.student_id,
       amount: e.amount,
       reason: e.reason,
@@ -103,59 +104,59 @@ function recomputeLessonLedger(db, lesson) {
   }
 }
 
-export function createLesson(studentId, body) {
-  return transaction((db) => {
-    const d = parseLessonBody(db, studentId, body);
-    const student = db.prepare('SELECT teacher_id FROM students WHERE id = ?').get(studentId);
+export async function createLesson(studentId, body) {
+  return transaction(async (db) => {
+    const d = await parseLessonBody(db, studentId, body);
+    const student = await db.get('SELECT teacher_id FROM students WHERE id = ?', [studentId]);
     const stamp = nowSeoulStamp();
-    const info = db
-      .prepare(
-        `INSERT INTO lessons
+    const info = await db.run(
+      `INSERT INTO lessons
           (student_id, lesson_date, attendance, late_minutes, word_status, word_etc_reason, word_range,
            word_seen, word_wrong, word_score, deadline_met, progress_today, next_direction, weakness,
            homework, progress_rate, attendance_only, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      )
-      .run(
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
         d.student_id, d.lesson_date, d.attendance, d.late_minutes, d.word_status, d.word_etc_reason,
         d.word_range, d.word_seen, d.word_wrong, d.word_score, d.deadline_met, d.progress_today,
-        d.next_direction, d.weakness, d.homework, d.progress_rate, d.attendance_only, stamp, stamp
-      );
+        d.next_direction, d.weakness, d.homework, d.progress_rate, d.attendance_only, stamp, stamp,
+      ]
+    );
     const id = Number(info.lastInsertRowid);
-    recomputeLessonLedger(db, { ...d, id, teacher_id: student.teacher_id });
-    return db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
+    await recomputeLessonLedger(db, { ...d, id, teacher_id: student.teacher_id });
+    return db.get('SELECT * FROM lessons WHERE id = ?', [id]);
   });
 }
 
-export function updateLesson(id, body) {
-  return transaction((db) => {
-    const existing = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
+export async function updateLesson(id, body) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM lessons WHERE id = ?', [id]);
     if (!existing) throw new NotFoundError('수업 기록을 찾을 수 없습니다.');
-    const d = parseLessonBody(db, existing.student_id, body, existing);
-    const student = db.prepare('SELECT teacher_id FROM students WHERE id = ?').get(existing.student_id);
-    db.prepare(
+    const d = await parseLessonBody(db, existing.student_id, body, existing);
+    const student = await db.get('SELECT teacher_id FROM students WHERE id = ?', [existing.student_id]);
+    await db.run(
       `UPDATE lessons SET
         lesson_date=?, attendance=?, late_minutes=?, word_status=?, word_etc_reason=?, word_range=?,
         word_seen=?, word_wrong=?, word_score=?, deadline_met=?, progress_today=?, next_direction=?,
         weakness=?, homework=?, progress_rate=?, attendance_only=?, updated_at=?
-       WHERE id=?`
-    ).run(
-      d.lesson_date, d.attendance, d.late_minutes, d.word_status, d.word_etc_reason, d.word_range,
-      d.word_seen, d.word_wrong, d.word_score, d.deadline_met, d.progress_today, d.next_direction,
-      d.weakness, d.homework, d.progress_rate, d.attendance_only, nowSeoulStamp(), id
+       WHERE id=?`,
+      [
+        d.lesson_date, d.attendance, d.late_minutes, d.word_status, d.word_etc_reason, d.word_range,
+        d.word_seen, d.word_wrong, d.word_score, d.deadline_met, d.progress_today, d.next_direction,
+        d.weakness, d.homework, d.progress_rate, d.attendance_only, nowSeoulStamp(), id,
+      ]
     );
     // 기존 CP 효과 되돌리고 새 값으로 재계산
-    recomputeLessonLedger(db, { ...d, id, teacher_id: student.teacher_id });
-    return db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
+    await recomputeLessonLedger(db, { ...d, id, teacher_id: student.teacher_id });
+    return db.get('SELECT * FROM lessons WHERE id = ?', [id]);
   });
 }
 
-export function deleteLesson(id) {
-  return transaction((db) => {
-    const existing = db.prepare('SELECT * FROM lessons WHERE id = ?').get(id);
+export async function deleteLesson(id) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM lessons WHERE id = ?', [id]);
     if (!existing) throw new NotFoundError('수업 기록을 찾을 수 없습니다.');
-    removeLedgerBySource(db, 'lesson', id); // CP 효과 되돌리기
-    db.prepare('DELETE FROM lessons WHERE id = ?').run(id);
+    await removeLedgerBySource(db, 'lesson', id); // CP 효과 되돌리기
+    await db.run('DELETE FROM lessons WHERE id = ?', [id]);
     return { deleted: true };
   });
 }

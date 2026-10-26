@@ -1,6 +1,6 @@
 // DB가 없으면 자동 초기화 + 시드한 뒤 서버를 시작한다.
 import fs from 'node:fs';
-import { getDbPath } from '../server/db/connection.js';
+import { getDbPath } from '../server/db/local-db.js';
 
 const dbPath = getDbPath();
 if (!fs.existsSync(dbPath)) {

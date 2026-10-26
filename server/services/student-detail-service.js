@@ -9,17 +9,17 @@ import { listMonthlyBonuses } from './bonus-service.js';
 import { listInventory } from './shop-service.js';
 import { getStudentOverride } from './rules-service.js';
 
-export function getStudentDetail(studentId) {
+export async function getStudentDetail(studentId) {
   const db = getDb();
-  const student = getStudent(studentId);
+  const student = await getStudent(studentId);
   return {
     student,
-    override: getStudentOverride(db, studentId),
-    ledger: getLedger(db, studentId),
-    lessons: listLessons(studentId),
-    exams: listExams(studentId),
-    examAnalysis: analyzeExams(studentId),
-    monthlyBonuses: listMonthlyBonuses(studentId),
-    inventory: listInventory(studentId),
+    override: await getStudentOverride(db, studentId),
+    ledger: await getLedger(db, studentId),
+    lessons: await listLessons(studentId),
+    exams: await listExams(studentId),
+    examAnalysis: await analyzeExams(studentId),
+    monthlyBonuses: await listMonthlyBonuses(studentId),
+    inventory: await listInventory(studentId),
   };
 }

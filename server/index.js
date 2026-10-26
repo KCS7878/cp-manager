@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runMigrations } from './db/migrate.js';
+import { initLocalDb } from './db/connection.js';
 import apiRouter from './http/api.js';
 import { promotePendingToAvailable } from './services/ledger-service.js';
 import { ValidationError, NotFoundError, ConflictError } from './lib/validation.js';
@@ -142,18 +143,26 @@ async function handle(req, res) {
   serveStatic(req, res, pathname);
 }
 
-// 초기화
-runMigrations();
-promotePendingToAvailable();
+// 초기화 (async)
+async function bootstrap() {
+  await initLocalDb();
+  await runMigrations();
+  await promotePendingToAvailable();
 
-const server = http.createServer((req, res) => {
-  handle(req, res).catch((err) => {
-    const { status, body } = mapError(err);
-    sendJson(res, status, body);
+  const server = http.createServer((req, res) => {
+    handle(req, res).catch((err) => {
+      const { status, body } = mapError(err);
+      sendJson(res, status, body);
+    });
   });
-});
 
-server.listen(PORT, () => {
-  console.log(`[CP 매니저] 서버 실행 중: http://localhost:${PORT}`);
-  if (ADMIN_KEY) console.log('[CP 매니저] 관리자 키 보호 활성화됨 (x-admin-key 헤더 필요)');
+  server.listen(PORT, () => {
+    console.log(`[CP 매니저] 서버 실행 중: http://localhost:${PORT}`);
+    if (ADMIN_KEY) console.log('[CP 매니저] 관리자 키 보호 활성화됨 (x-admin-key 헤더 필요)');
+  });
+}
+
+bootstrap().catch((err) => {
+  console.error('[CP 매니저] 시작 실패:', err);
+  process.exit(1);
 });

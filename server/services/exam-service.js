@@ -14,12 +14,13 @@ import {
 
 const EXAM_KINDS = ['school', 'mock'];
 
-export function listExams(studentId) {
+export async function listExams(studentId) {
   const db = getDb();
-  return db
-    .prepare('SELECT * FROM exams WHERE student_id = ? ORDER BY exam_date DESC, id DESC')
-    .all(studentId)
-    .map((e) => ({ ...e, items: e.items_json ? JSON.parse(e.items_json) : null }));
+  const rows = await db.all(
+    'SELECT * FROM exams WHERE student_id = ? ORDER BY exam_date DESC, id DESC',
+    [studentId]
+  );
+  return rows.map((e) => ({ ...e, items: e.items_json ? JSON.parse(e.items_json) : null }));
 }
 
 function validateItems(items) {
@@ -54,39 +55,39 @@ function parseExamBody(body, existing = {}) {
   };
 }
 
-export function createExam(studentId, body) {
-  return transaction((db) => {
-    const s = db.prepare('SELECT id FROM students WHERE id = ?').get(studentId);
+export async function createExam(studentId, body) {
+  return transaction(async (db) => {
+    const s = await db.get('SELECT id FROM students WHERE id = ?', [studentId]);
     if (!s) throw new NotFoundError('학생을 찾을 수 없습니다.');
     const d = parseExamBody(body);
     const stamp = nowSeoulStamp();
-    const info = db
-      .prepare(
-        `INSERT INTO exams (student_id, exam_type, exam_name, exam_date, score, grade, strengths, weakness, feedback, items_json, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`
-      )
-      .run(studentId, d.exam_type, d.exam_name, d.exam_date, d.score, d.grade, d.strengths, d.weakness, d.feedback, d.items_json, stamp, stamp);
-    return db.prepare('SELECT * FROM exams WHERE id = ?').get(Number(info.lastInsertRowid));
+    const info = await db.run(
+      `INSERT INTO exams (student_id, exam_type, exam_name, exam_date, score, grade, strengths, weakness, feedback, items_json, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [studentId, d.exam_type, d.exam_name, d.exam_date, d.score, d.grade, d.strengths, d.weakness, d.feedback, d.items_json, stamp, stamp]
+    );
+    return db.get('SELECT * FROM exams WHERE id = ?', [Number(info.lastInsertRowid)]);
   });
 }
 
-export function updateExam(id, body) {
-  return transaction((db) => {
-    const existing = db.prepare('SELECT * FROM exams WHERE id = ?').get(id);
+export async function updateExam(id, body) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM exams WHERE id = ?', [id]);
     if (!existing) throw new NotFoundError('시험 기록을 찾을 수 없습니다.');
     const d = parseExamBody(body, existing);
-    db.prepare(
-      `UPDATE exams SET exam_type=?, exam_name=?, exam_date=?, score=?, grade=?, strengths=?, weakness=?, feedback=?, items_json=?, updated_at=? WHERE id=?`
-    ).run(d.exam_type, d.exam_name, d.exam_date, d.score, d.grade, d.strengths, d.weakness, d.feedback, d.items_json, nowSeoulStamp(), id);
-    return db.prepare('SELECT * FROM exams WHERE id = ?').get(id);
+    await db.run(
+      `UPDATE exams SET exam_type=?, exam_name=?, exam_date=?, score=?, grade=?, strengths=?, weakness=?, feedback=?, items_json=?, updated_at=? WHERE id=?`,
+      [d.exam_type, d.exam_name, d.exam_date, d.score, d.grade, d.strengths, d.weakness, d.feedback, d.items_json, nowSeoulStamp(), id]
+    );
+    return db.get('SELECT * FROM exams WHERE id = ?', [id]);
   });
 }
 
-export function deleteExam(id) {
-  return transaction((db) => {
-    const existing = db.prepare('SELECT * FROM exams WHERE id = ?').get(id);
+export async function deleteExam(id) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM exams WHERE id = ?', [id]);
     if (!existing) throw new NotFoundError('시험 기록을 찾을 수 없습니다.');
-    db.prepare('DELETE FROM exams WHERE id = ?').run(id);
+    await db.run('DELETE FROM exams WHERE id = ?', [id]);
     return { deleted: true };
   });
 }
@@ -98,11 +99,11 @@ export function deleteExam(id) {
  * - 유형별 누적 정답률 (입력된 문항만)
  * - 반복 오답 유형
  */
-export function analyzeExams(studentId) {
+export async function analyzeExams(studentId) {
   const db = getDb();
-  const student = db.prepare('SELECT * FROM students WHERE id = ?').get(studentId);
+  const student = await db.get('SELECT * FROM students WHERE id = ?', [studentId]);
   if (!student) throw new NotFoundError('학생을 찾을 수 없습니다.');
-  const exams = listExams(studentId);
+  const exams = await listExams(studentId);
 
   const school = exams.filter((e) => e.exam_type === 'school').sort((a, b) => a.exam_date.localeCompare(b.exam_date));
   const mock = exams.filter((e) => e.exam_type === 'mock').sort((a, b) => a.exam_date.localeCompare(b.exam_date));

@@ -10,13 +10,14 @@ import { requireInt, NotFoundError, ValidationError } from '../lib/validation.js
  * - 무지각: 해당 월 지각/결석 기록 없음
  * - 단어 성실: 해당 월 단어시험 기록이 1개 이상이고, 미응시/기한초과가 없음
  */
-export function evaluateMonthlyBonus(db, teacherId, studentId, monthKey) {
+export async function evaluateMonthlyBonus(db, teacherId, studentId, monthKey) {
   const { start, end } = monthRange(monthKey);
-  const rules = getEffectiveRules(db, teacherId, studentId);
+  const rules = await getEffectiveRules(db, teacherId, studentId);
 
-  const lessons = db
-    .prepare('SELECT * FROM lessons WHERE student_id = ? AND lesson_date BETWEEN ? AND ?')
-    .all(studentId, start, end);
+  const lessons = await db.all(
+    'SELECT * FROM lessons WHERE student_id = ? AND lesson_date BETWEEN ? AND ?',
+    [studentId, start, end]
+  );
 
   const hasLateOrAbsent = lessons.some(
     (l) => l.attendance === 'late' || l.attendance === 'absent'
@@ -37,19 +38,20 @@ export function evaluateMonthlyBonus(db, teacherId, studentId, monthKey) {
 }
 
 /** 월간 보너스 자동 계산 후 저장 (장부 반영). 기존 보너스는 되돌린 뒤 재계산. */
-export function computeAndSaveMonthlyBonus(studentId, monthKey) {
-  return transaction((db) => {
-    const student = db.prepare('SELECT teacher_id FROM students WHERE id = ?').get(studentId);
+export async function computeAndSaveMonthlyBonus(studentId, monthKey) {
+  return transaction(async (db) => {
+    const student = await db.get('SELECT teacher_id FROM students WHERE id = ?', [studentId]);
     if (!student) throw new NotFoundError('학생을 찾을 수 없습니다.');
 
-    const evalResult = evaluateMonthlyBonus(db, student.teacher_id, studentId, monthKey);
+    const evalResult = await evaluateMonthlyBonus(db, student.teacher_id, studentId, monthKey);
 
     // 기존 보너스 row + 장부 제거
-    const existing = db
-      .prepare('SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?')
-      .get(studentId, monthKey);
+    const existing = await db.get(
+      'SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?',
+      [studentId, monthKey]
+    );
     const manualAdjust = existing ? existing.manual_adjust : 0;
-    if (existing && existing.ledger_id) removeLedgerById(db, existing.ledger_id);
+    if (existing && existing.ledger_id) await removeLedgerById(db, existing.ledger_id);
 
     const total = evalResult.noLateBonus + evalResult.wordBonus + manualAdjust;
     let ledgerId = null;
@@ -58,7 +60,7 @@ export function computeAndSaveMonthlyBonus(studentId, monthKey) {
       if (evalResult.noLateBonus) parts.push(`무지각 +${evalResult.noLateBonus}`);
       if (evalResult.wordBonus) parts.push(`단어성실 +${evalResult.wordBonus}`);
       if (manualAdjust) parts.push(`수동조정 ${manualAdjust > 0 ? '+' : ''}${manualAdjust}`);
-      ledgerId = addLedgerEntry(db, {
+      ledgerId = await addLedgerEntry(db, {
         studentId,
         amount: total,
         reason: `${monthKey} 월간 보너스 (${parts.join(', ')})`,
@@ -69,35 +71,35 @@ export function computeAndSaveMonthlyBonus(studentId, monthKey) {
       });
     }
 
-    db.prepare(
+    await db.run(
       `INSERT INTO monthly_bonuses (student_id, month_key, no_late_bonus, word_bonus, manual_adjust, ledger_id, computed_at)
        VALUES (?,?,?,?,?,?,?)
        ON CONFLICT(student_id, month_key) DO UPDATE SET
          no_late_bonus=excluded.no_late_bonus, word_bonus=excluded.word_bonus,
-         manual_adjust=excluded.manual_adjust, ledger_id=excluded.ledger_id, computed_at=excluded.computed_at`
-    ).run(
-      studentId, monthKey, evalResult.noLateBonus, evalResult.wordBonus, manualAdjust, ledgerId, nowSeoulStamp()
+         manual_adjust=excluded.manual_adjust, ledger_id=excluded.ledger_id, computed_at=excluded.computed_at`,
+      [studentId, monthKey, evalResult.noLateBonus, evalResult.wordBonus, manualAdjust, ledgerId, nowSeoulStamp()]
     );
 
-    return db.prepare('SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?').get(studentId, monthKey);
+    return db.get('SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?', [studentId, monthKey]);
   });
 }
 
 /** 관리자 수동 조정 (금액 수정) */
-export function adjustMonthlyBonus(studentId, monthKey, manualAdjust) {
-  return transaction((db) => {
-    const existing = db
-      .prepare('SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?')
-      .get(studentId, monthKey);
+export async function adjustMonthlyBonus(studentId, monthKey, manualAdjust) {
+  return transaction(async (db) => {
+    const existing = await db.get(
+      'SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?',
+      [studentId, monthKey]
+    );
     if (!existing) throw new NotFoundError('먼저 월간 보너스를 계산해야 합니다.');
     const adj = requireInt(manualAdjust, '수동 조정액');
-    const student = db.prepare('SELECT teacher_id FROM students WHERE id = ?').get(studentId);
-    if (existing.ledger_id) removeLedgerById(db, existing.ledger_id);
+    const student = await db.get('SELECT teacher_id FROM students WHERE id = ?', [studentId]);
+    if (existing.ledger_id) await removeLedgerById(db, existing.ledger_id);
 
     const total = existing.no_late_bonus + existing.word_bonus + adj;
     let ledgerId = null;
     if (total !== 0) {
-      ledgerId = addLedgerEntry(db, {
+      ledgerId = await addLedgerEntry(db, {
         studentId,
         amount: total,
         reason: `${monthKey} 월간 보너스 (수동 조정 반영)`,
@@ -107,29 +109,32 @@ export function adjustMonthlyBonus(studentId, monthKey, manualAdjust) {
         immediate: true,
       });
     }
-    db.prepare(
-      'UPDATE monthly_bonuses SET manual_adjust = ?, ledger_id = ?, computed_at = ? WHERE student_id = ? AND month_key = ?'
-    ).run(adj, ledgerId, nowSeoulStamp(), studentId, monthKey);
-    return db.prepare('SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?').get(studentId, monthKey);
+    await db.run(
+      'UPDATE monthly_bonuses SET manual_adjust = ?, ledger_id = ?, computed_at = ? WHERE student_id = ? AND month_key = ?',
+      [adj, ledgerId, nowSeoulStamp(), studentId, monthKey]
+    );
+    return db.get('SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?', [studentId, monthKey]);
   });
 }
 
 /** 보너스 제거 */
-export function removeMonthlyBonus(studentId, monthKey) {
-  return transaction((db) => {
-    const existing = db
-      .prepare('SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?')
-      .get(studentId, monthKey);
+export async function removeMonthlyBonus(studentId, monthKey) {
+  return transaction(async (db) => {
+    const existing = await db.get(
+      'SELECT * FROM monthly_bonuses WHERE student_id = ? AND month_key = ?',
+      [studentId, monthKey]
+    );
     if (!existing) throw new NotFoundError('보너스를 찾을 수 없습니다.');
-    if (existing.ledger_id) removeLedgerById(db, existing.ledger_id);
-    db.prepare('DELETE FROM monthly_bonuses WHERE student_id = ? AND month_key = ?').run(studentId, monthKey);
+    if (existing.ledger_id) await removeLedgerById(db, existing.ledger_id);
+    await db.run('DELETE FROM monthly_bonuses WHERE student_id = ? AND month_key = ?', [studentId, monthKey]);
     return { deleted: true };
   });
 }
 
-export function listMonthlyBonuses(studentId) {
+export async function listMonthlyBonuses(studentId) {
   const db = getDb();
-  return db
-    .prepare('SELECT * FROM monthly_bonuses WHERE student_id = ? ORDER BY month_key DESC')
-    .all(studentId);
+  return db.all(
+    'SELECT * FROM monthly_bonuses WHERE student_id = ? ORDER BY month_key DESC',
+    [studentId]
+  );
 }

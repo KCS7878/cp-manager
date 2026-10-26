@@ -15,7 +15,7 @@ const GOAL_TYPES = ['grade', 'score', 'undecided'];
 const WORD_MODES = ['count', 'score'];
 
 /** 학생 목록 (요약 CP 포함). filters 적용. */
-export function listStudents(teacherId, filters = {}) {
+export async function listStudents(teacherId, filters = {}) {
   const db = getDb();
   const where = ['s.archived = 0'];
   const params = [];
@@ -48,14 +48,16 @@ export function listStudents(teacherId, filters = {}) {
     params.push(`%${filters.name}%`);
   }
 
-  const rows = db
-    .prepare(`SELECT s.* FROM students s WHERE ${where.join(' AND ')} ORDER BY s.name`)
-    .all(...params);
+  const rows = await db.all(
+    `SELECT s.* FROM students s WHERE ${where.join(' AND ')} ORDER BY s.name`,
+    [...params]
+  );
 
-  const withCp = rows.map((s) => {
-    const bal = getStudentBalance(db, s.id);
-    return { ...s, available_cp: bal.available, pending_cp: bal.pending, cumulative_cp: bal.cumulative };
-  });
+  const withCp = [];
+  for (const s of rows) {
+    const bal = await getStudentBalance(db, s.id);
+    withCp.push({ ...s, available_cp: bal.available, pending_cp: bal.pending, cumulative_cp: bal.cumulative });
+  }
 
   // 정렬
   if (filters.sort === 'cp_asc') withCp.sort((a, b) => a.available_cp - b.available_cp);
@@ -65,11 +67,11 @@ export function listStudents(teacherId, filters = {}) {
   return withCp;
 }
 
-export function getStudent(id) {
+export async function getStudent(id) {
   const db = getDb();
-  const s = db.prepare('SELECT * FROM students WHERE id = ?').get(id);
+  const s = await db.get('SELECT * FROM students WHERE id = ?', [id]);
   if (!s) throw new NotFoundError('학생을 찾을 수 없습니다.');
-  const bal = getStudentBalance(db, id);
+  const bal = await getStudentBalance(db, id);
   return { ...s, available_cp: bal.available, pending_cp: bal.pending, cumulative_cp: bal.cumulative };
 }
 
@@ -105,82 +107,84 @@ function parseStudentBody(body, existing = {}) {
   };
 }
 
-export function createStudent(body) {
-  return transaction((db) => {
+export async function createStudent(body) {
+  return transaction(async (db) => {
     const d = parseStudentBody(body);
     if (!d.teacher_id) throw new NotFoundError('담당 강사를 지정해 주세요.');
-    const t = db.prepare('SELECT id FROM teachers WHERE id = ?').get(d.teacher_id);
+    const t = await db.get('SELECT id FROM teachers WHERE id = ?', [d.teacher_id]);
     if (!t) throw new NotFoundError('담당 강사를 찾을 수 없습니다.');
     const stamp = nowSeoulStamp();
-    const info = db
-      .prepare(
-        `INSERT INTO students
+    const info = await db.run(
+      `INSERT INTO students
           (teacher_id, name, school, school_level, grade, class_name, age, subject,
            mock_goal_type, mock_goal_value, exam_goal_type, exam_goal_value, word_input_mode,
            created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
-      )
-      .run(
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
         d.teacher_id, d.name, d.school, d.school_level, d.grade, d.class_name, d.age, d.subject,
         d.mock_goal_type, d.mock_goal_value, d.exam_goal_type, d.exam_goal_value, d.word_input_mode,
-        stamp, stamp
-      );
-    return getStudent(Number(info.lastInsertRowid));
+        stamp, stamp,
+      ]
+    );
+    return await getStudent(Number(info.lastInsertRowid));
   });
 }
 
-export function updateStudent(id, body) {
-  return transaction((db) => {
-    const existing = db.prepare('SELECT * FROM students WHERE id = ?').get(id);
+export async function updateStudent(id, body) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM students WHERE id = ?', [id]);
     if (!existing) throw new NotFoundError('학생을 찾을 수 없습니다.');
     const d = parseStudentBody(body, existing);
-    db.prepare(
+    await db.run(
       `UPDATE students SET
         name=?, teacher_id=?, school=?, school_level=?, grade=?, class_name=?, age=?, subject=?,
         mock_goal_type=?, mock_goal_value=?, exam_goal_type=?, exam_goal_value=?, word_input_mode=?,
         updated_at=?
-       WHERE id=?`
-    ).run(
-      d.name, d.teacher_id, d.school, d.school_level, d.grade, d.class_name, d.age, d.subject,
-      d.mock_goal_type, d.mock_goal_value, d.exam_goal_type, d.exam_goal_value, d.word_input_mode,
-      nowSeoulStamp(), id
+       WHERE id=?`,
+      [
+        d.name, d.teacher_id, d.school, d.school_level, d.grade, d.class_name, d.age, d.subject,
+        d.mock_goal_type, d.mock_goal_value, d.exam_goal_type, d.exam_goal_value, d.word_input_mode,
+        nowSeoulStamp(), id,
+      ]
     );
-    return getStudent(id);
+    return await getStudent(id);
   });
 }
 
 /** 학생 삭제 전 연결 기록 개수 안내 */
-export function getStudentDeletionImpact(id) {
+export async function getStudentDeletionImpact(id) {
   const db = getDb();
-  const s = db.prepare('SELECT * FROM students WHERE id = ?').get(id);
+  const s = await db.get('SELECT * FROM students WHERE id = ?', [id]);
   if (!s) throw new NotFoundError('학생을 찾을 수 없습니다.');
-  const count = (sql) => db.prepare(sql).get(id).c;
+  const count = async (sql) => {
+    const row = await db.get(sql, [id]);
+    return row.c;
+  };
   return {
     student: s.name,
-    lessons: count('SELECT COUNT(*) c FROM lessons WHERE student_id = ?'),
-    exams: count('SELECT COUNT(*) c FROM exams WHERE student_id = ?'),
-    ledger: count('SELECT COUNT(*) c FROM cp_ledger WHERE student_id = ?'),
-    purchases: count('SELECT COUNT(*) c FROM purchases WHERE student_id = ?'),
-    participation: count('SELECT COUNT(*) c FROM participation WHERE student_id = ?'),
+    lessons: await count('SELECT COUNT(*) c FROM lessons WHERE student_id = ?'),
+    exams: await count('SELECT COUNT(*) c FROM exams WHERE student_id = ?'),
+    ledger: await count('SELECT COUNT(*) c FROM cp_ledger WHERE student_id = ?'),
+    purchases: await count('SELECT COUNT(*) c FROM purchases WHERE student_id = ?'),
+    participation: await count('SELECT COUNT(*) c FROM participation WHERE student_id = ?'),
   };
 }
 
-export function deleteStudent(id) {
-  return transaction((db) => {
-    const existing = db.prepare('SELECT * FROM students WHERE id = ?').get(id);
+export async function deleteStudent(id) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM students WHERE id = ?', [id]);
     if (!existing) throw new NotFoundError('학생을 찾을 수 없습니다.');
-    db.prepare('DELETE FROM students WHERE id = ?').run(id); // CASCADE
+    await db.run('DELETE FROM students WHERE id = ?', [id]); // CASCADE
     return { deleted: true };
   });
 }
 
 /** 강사의 분반 목록 */
-export function listClasses(teacherId) {
+export async function listClasses(teacherId) {
   const db = getDb();
-  return db
-    .prepare(
-      "SELECT DISTINCT class_name FROM students WHERE teacher_id = ? AND class_name IS NOT NULL AND class_name != '' AND archived = 0 ORDER BY class_name"
-    )
-    .all(teacherId)
-    .map((r) => r.class_name);
+  const rows = await db.all(
+    "SELECT DISTINCT class_name FROM students WHERE teacher_id = ? AND class_name IS NOT NULL AND class_name != '' AND archived = 0 ORDER BY class_name",
+    [teacherId]
+  );
+  return rows.map((r) => r.class_name);
 }

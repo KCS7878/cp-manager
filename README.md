@@ -13,8 +13,8 @@
 
 | 영역 | 권장 | 본 구현 (가정) | 근거 |
 |---|---|---|---|
-| 런타임/서버 | Next.js API Routes | **순수 Node.js 22 `http` 서버** + 자체 REST 라우터 | 무의존성, 서버리스 이식 용이 |
-| DB | SQLite / D1 / RDB | **Node.js 내장 `node:sqlite`** (실제 SQLite 파일, WAL, 트랜잭션) | D1과 동일한 SQL 방언 → 이식 용이 |
+| 런타임/서버 | Next.js API Routes | **로컬: 순수 Node.js 22 `http` 서버 / 배포: Cloudflare Workers** (동일 라우터·서비스 공유) | 무의존성, 서버리스 네이티브 |
+| DB | SQLite / D1 / RDB | **로컬: `node:sqlite` / 배포: Cloudflare D1** (async 어댑터로 통합) | 두 환경 동일 코드, D1은 영구 저장 |
 | 프런트 | React + TypeScript | **바닐라 JS (ES 모듈)** SPA | 빌드/설치 불필요, 즉시 실행 |
 | 이미지 저장 | R2 / S3 | **로컬 `public/uploads`** (객체 저장소 어댑터로 추상화: `upload-service.js`만 교체하면 R2/S3 전환) | 무의존성 |
 | PNG 저장 | html-to-image 등 | **SVG `foreignObject` → canvas** 직접 구현 (`public/js/png.js`) | 무의존성 |
@@ -140,13 +140,25 @@ npm start
 → `http://localhost:3000` 접속. **DB가 없으면 자동으로 생성 + 샘플 데이터를 시드**한 뒤 서버가 뜹니다.
 샘플: 강사 2명(김영어/이보카), 학생 3명(박지민/최수아/정도윤), 지난달 수업·시험·보너스 기록 포함.
 
-### 기타 명령
+### 기타 명령 (로컬)
 ```bash
 npm run serve        # 자동 시드 없이 서버만 기동
 npm run dev          # 파일 변경 감지(개발)
 npm run db:reset     # DB 삭제 후 재생성 + 시드
 PORT=8080 npm start  # 포트 변경
 ```
+
+### Cloudflare Workers + D1 배포
+웹 대시보드 방식(비개발자용)은 **`CLOUDFLARE-배포안내.md`** 참고. CLI 방식:
+```bash
+npm i -g wrangler && wrangler login
+npx wrangler d1 create cp-manager-db          # database_id를 wrangler.toml에 입력
+npx wrangler d1 execute cp-manager-db --remote --file=server/db/schema.sql
+npx wrangler deploy
+```
+- DB 계층은 async 어댑터(`server/db/adapter.js`)로 로컬(node:sqlite)과 D1을 동일 인터페이스로 통합
+- Workers 진입점은 `worker.js`, 정적 자산은 `public/`가 `assets` 바인딩으로 서빙
+- 이미지 업로드는 로컬=파일저장 / Workers=data URL 인라인 저장(추후 R2 연동 지점)
 
 관리자 보호 활성화:
 ```bash
