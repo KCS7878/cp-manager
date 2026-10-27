@@ -17,18 +17,21 @@ export function renderLessons(ctx) {
     return wrap;
   }
 
-  // ── 최근 10회 단어시험 막대그래프 ──
+  // ── 최근 5회 단어시험 막대그래프 ──
   const chart = renderWordChart(lessons, passScore);
   if (chart) wrap.appendChild(chart);
 
-  // ── 학습 기록 목록: 최근 10개는 한눈에, 그 이상은 내부 스크롤 ──
-  const rows = lessons.map((l) =>
-    h('tr', {},
+  // ── 학습 기록 목록: 최근 5개는 한눈에, 그 이상은 내부 스크롤 ──
+  const rows = lessons.map((l) => {
+    // 단어시험 상태 칸: 응시 + 기한초과면 '기한초과'를 빨간색으로 덧붙임
+    const overdue = l.word_status === 'taken' && !l.deadline_met;
+    const wordCell = h('span', { class: 'pill ' + l.word_status }, WORD_STATUS_LABEL[l.word_status]);
+    return h('tr', {},
       h('td', {}, l.lesson_date),
       h('td', {}, h('span', { class: 'pill ' + l.attendance }, ATT_LABEL[l.attendance] + (l.attendance === 'late' && l.late_minutes ? ` ${l.late_minutes}분` : ''))),
-      h('td', {}, h('span', { class: 'pill ' + l.word_status }, WORD_STATUS_LABEL[l.word_status])),
+      h('td', {}, wordCell, overdue ? h('span', { class: 'overdue-tag' }, ' 기한초과') : null),
       h('td', { class: 'wrap-anywhere' }, l.word_range || '-'),
-      h('td', {}, l.word_status === 'taken' ? `${l.word_score}점${l.deadline_met ? '' : ' (기한초과)'}` : '-'),
+      h('td', {}, l.word_status === 'taken' ? `${l.word_score}점` : '-'),
       h('td', { class: 'wrap-anywhere' }, l.progress_today || '-'),
       h('td', {},
         h('div', { class: 'btn-row' },
@@ -36,11 +39,11 @@ export function renderLessons(ctx) {
           h('button', { class: 'btn sm danger', onClick: () => delLesson(ctx, l) }, '삭제'),
         )
       )
-    )
-  );
+    );
+  });
 
-  // 10개 초과 시 내부 스크롤(최근 10행 높이까지만 노출)
-  const scrollClass = lessons.length > 10 ? 'table-scroll lessons-scroll' : 'table-scroll';
+  // 5개 초과 시 내부 스크롤(최근 5행 높이까지만 노출)
+  const scrollClass = lessons.length > 5 ? 'table-scroll rows-scroll-5' : 'table-scroll';
   wrap.appendChild(h('div', { class: scrollClass },
     h('table', { class: 'data' },
       h('thead', {}, h('tr', {},
@@ -49,41 +52,40 @@ export function renderLessons(ctx) {
       h('tbody', {}, ...rows)
     )
   ));
-  if (lessons.length > 10) {
-    wrap.appendChild(h('div', { class: 'hint', style: { marginTop: '0.3rem' } },
-      `최근 10개가 표시됩니다. 스크롤하면 나머지 ${lessons.length - 10}개를 볼 수 있습니다.`));
-  }
   return wrap;
 }
 
-// 단어시험(응시/미응시)만 추려 최근 10회를 막대그래프로.
+// 단어시험(응시/미응시)만 추려 최근 5회를 막대그래프로.
 // 색: 통과=초록, 미달(기한내 미통과)=주황, 미응시·기한초과=빨강
+// 높이: 점수(0~100)에 비례. 막대 영역 높이(WC_PLOT_PX) 기준으로 px 지정.
+const WC_PLOT_PX = 150;
 function renderWordChart(lessons, passScore) {
   const tests = lessons.filter((l) => l.word_status === 'taken' || l.word_status === 'noshow');
   if (!tests.length) return null;
-  // lessons 는 최신순 → 최근 10개 뽑아 과거→현재 순으로 뒤집어 그림
-  const recent = tests.slice(0, 10).reverse();
+  // lessons 는 최신순 → 최근 5개 뽑아 과거→현재 순으로 뒤집어 그림
+  const recent = tests.slice(0, 5).reverse();
 
   const bars = recent.map((l) => {
-    let cls, score, label;
+    let cls, score, label, isNoshow = false;
     if (l.word_status === 'noshow') {
-      cls = 'bar-red'; score = 0; label = '미응시';
+      cls = 'bar-red'; score = 0; label = '미응시'; isNoshow = true;
     } else {
       score = Number(l.word_score) || 0;
       if (!l.deadline_met) { cls = 'bar-red'; label = `${score}점·기한초과`; }
       else if (score >= passScore) { cls = 'bar-green'; label = `${score}점·통과`; }
       else { cls = 'bar-orange'; label = `${score}점·미달`; }
     }
-    const heightPct = Math.max(4, score); // 0점도 최소 높이로 보이게
+    // 미응시는 바닥에 얇은 막대만. 응시는 점수 비례 높이(최소 10px).
+    const barPx = isNoshow ? 6 : Math.max(10, Math.round((score / 100) * WC_PLOT_PX));
     return h('div', { class: 'wc-col', title: `${l.lesson_date} · ${label}` },
-      h('div', { class: 'wc-bar-track' },
-        h('div', { class: `wc-bar ${cls}`, style: { height: heightPct + '%' } },
-          h('span', { class: 'wc-val' }, l.word_status === 'noshow' ? '—' : String(score))
-        )
-      ),
+      h('div', { class: `wc-bar ${cls}`, style: { height: barPx + 'px' } }),
+      h('div', { class: 'wc-val' }, isNoshow ? '미응시' : String(score)),
       h('div', { class: 'wc-date' }, (l.lesson_date || '').slice(5)) // MM-DD
     );
   });
+
+  // 통과선 위치: 막대 영역 하단 기준 px
+  const passPx = Math.round((passScore / 100) * WC_PLOT_PX);
 
   return h('div', { class: 'word-chart' },
     h('div', { class: 'wc-head' },
@@ -94,8 +96,8 @@ function renderWordChart(lessons, passScore) {
         h('span', { class: 'wc-dot bar-red' }), '미응시·기한초과',
       )
     ),
-    h('div', { class: 'wc-plot' },
-      h('div', { class: 'wc-passline', style: { bottom: passScore + '%' }, title: `통과 기준 ${passScore}점` }),
+    h('div', { class: 'wc-plot', style: { height: WC_PLOT_PX + 'px' } },
+      h('div', { class: 'wc-passline', style: { bottom: passPx + 'px' }, title: `통과 기준 ${passScore}점` }),
       ...bars
     )
   );
