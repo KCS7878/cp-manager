@@ -79,13 +79,13 @@ async function renderPurchases(ctx, content) {
       const { purchases } = await api.get(`/api/teachers/${state.teacher.id}/purchases`, { query: q });
       clear(box);
       if (!purchases.length) { box.appendChild(h('div', { class: 'empty' }, '구매 내역이 없습니다.')); return; }
-      box.appendChild(h('div', { class: 'table-scroll' },
+      box.appendChild(h('div', { class: 'card-table' }, h('div', { class: 'table-scroll' },
         h('table', { class: 'data' },
           h('thead', {}, h('tr', {}, h('th', {}, '구매일'), h('th', {}, '학생'), h('th', {}, '상품'), h('th', {}, 'CP'), h('th', {}, '상태'))),
           h('tbody', {}, ...purchases.map((p) => h('tr', {},
-            h('td', {}, p.purchased_at.slice(0, 10)), h('td', {}, p.student_name), h('td', { class: 'wrap-anywhere' }, p.product_name),
-            h('td', { class: 'neg' }, `-${p.cp_spent}`),
-            h('td', {}, h('span', { class: 'pill ' + (p.inventory_state === 'used' ? 'none' : 'present') }, p.inventory_state === 'used' ? '사용완료' : '보유중'))))))));
+            h('td', { 'data-label': '구매일' }, p.purchased_at.slice(0, 10)), h('td', { 'data-label': '학생' }, p.student_name), h('td', { 'data-label': '상품', class: 'wrap-anywhere' }, p.product_name),
+            h('td', { 'data-label': 'CP', class: 'neg' }, `-${p.cp_spent}`),
+            h('td', { 'data-label': '상태' }, h('span', { class: 'pill ' + (p.inventory_state === 'used' ? 'none' : 'present') }, p.inventory_state === 'used' ? '사용완료' : '보유중')))))))));
     } catch (e) { clear(box); box.appendChild(h('div', { class: 'error-box' }, e.message)); }
   }
   onlyMe.onchange = load;
@@ -108,16 +108,16 @@ async function renderInventory(ctx, content) {
       ? h('button', { class: 'btn sm secondary', onClick: () => setState(ctx, p, 'owned') }, '보유로 되돌리기')
       : h('button', { class: 'btn sm sage', onClick: () => setState(ctx, p, 'used') }, '사용 처리');
     return h('tr', {},
-      h('td', { class: 'wrap-anywhere' }, p.product_name),
-      h('td', {}, p.purchased_at.slice(0, 10)),
-      h('td', {}, h('span', { class: 'pill ' + (p.inventory_state === 'used' ? 'none' : 'present') }, p.inventory_state === 'used' ? '사용완료' : '보유중')),
-      h('td', {}, p.used_at || '-'),
-      h('td', {}, stateBtn));
+      h('td', { 'data-label': '상품', class: 'wrap-anywhere' }, p.product_name),
+      h('td', { 'data-label': '구매일' }, p.purchased_at.slice(0, 10)),
+      h('td', { 'data-label': '상태' }, h('span', { class: 'pill ' + (p.inventory_state === 'used' ? 'none' : 'present') }, p.inventory_state === 'used' ? '사용완료' : '보유중')),
+      h('td', { 'data-label': '사용일' }, p.used_at || '-'),
+      h('td', { 'data-label': '' }, stateBtn));
   });
-  box.appendChild(h('div', { class: 'table-scroll' },
+  box.appendChild(h('div', { class: 'card-table' }, h('div', { class: 'table-scroll' },
     h('table', { class: 'data' },
       h('thead', {}, h('tr', {}, h('th', {}, '상품'), h('th', {}, '구매일'), h('th', {}, '상태'), h('th', {}, '사용일'), h('th', {}, ''))),
-      h('tbody', {}, ...invRows))));
+      h('tbody', {}, ...invRows)))));
 }
 
 async function setState(ctx, p, st) {

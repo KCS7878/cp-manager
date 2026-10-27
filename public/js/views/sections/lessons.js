@@ -29,13 +29,13 @@ export function renderLessons(ctx) {
       ? h('span', { class: 'overdue-tag' }, '기한초과')
       : h('span', { class: 'pill ' + l.word_status }, WORD_STATUS_LABEL[l.word_status]);
     return h('tr', {},
-      h('td', {}, l.lesson_date),
-      h('td', {}, h('span', { class: 'pill ' + l.attendance }, ATT_LABEL[l.attendance] + (l.attendance === 'late' && l.late_minutes ? ` ${l.late_minutes}분` : ''))),
-      h('td', {}, wordCell),
-      h('td', { class: 'wrap-anywhere' }, l.word_range || '-'),
-      h('td', {}, l.word_status === 'taken' ? `${l.word_score}점` : '-'),
-      h('td', { class: 'wrap-anywhere' }, l.progress_today || '-'),
-      h('td', {},
+      h('td', { 'data-label': '수업일' }, l.lesson_date),
+      h('td', { 'data-label': '출결' }, h('span', { class: 'pill ' + l.attendance }, ATT_LABEL[l.attendance] + (l.attendance === 'late' && l.late_minutes ? ` ${l.late_minutes}분` : ''))),
+      h('td', { 'data-label': '단어시험' }, wordCell),
+      h('td', { 'data-label': '범위', class: 'wrap-anywhere' }, l.word_range || '-'),
+      h('td', { 'data-label': '점수' }, l.word_status === 'taken' ? `${l.word_score}점` : '-'),
+      h('td', { 'data-label': '진도', class: 'wrap-anywhere' }, l.progress_today || '-'),
+      h('td', { 'data-label': '' },
         h('div', { class: 'btn-row' },
           h('button', { class: 'btn sm secondary', onClick: () => openLessonForm(ctx, l) }, '수정'),
           h('button', { class: 'btn sm danger', onClick: () => delLesson(ctx, l) }, '삭제'),
@@ -46,14 +46,14 @@ export function renderLessons(ctx) {
 
   // 5개 초과 시 내부 스크롤(최근 5행 높이까지만 노출)
   const scrollClass = lessons.length > 5 ? 'table-scroll rows-scroll-5' : 'table-scroll';
-  wrap.appendChild(h('div', { class: scrollClass },
+  wrap.appendChild(h('div', { class: 'card-table' }, h('div', { class: scrollClass },
     h('table', { class: 'data' },
       h('thead', {}, h('tr', {},
         h('th', {}, '수업일'), h('th', {}, '출결'), h('th', {}, '단어시험'),
         h('th', {}, '범위'), h('th', {}, '점수'), h('th', {}, '진도'), h('th', {}, ''))),
       h('tbody', {}, ...rows)
     )
-  ));
+  )));
   return wrap;
 }
 
