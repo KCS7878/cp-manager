@@ -581,3 +581,25 @@ table.data tr:hover td { background: #fffaf3; }
   /* 극단적으로 좁은 경우만 1열 */
   .entry-role-row { grid-template-columns: 1fr; }
 }
+
+/* 시작 화면: 새 강사 만들기 구분선 */
+.entry-newteacher { margin-top: 0.6rem; }
+.entry-or { text-align: center; color: #a9b2bd; font-size: 0.82rem; margin: 0.5rem 0; position: relative; }
+.entry-or::before, .entry-or::after { content: ''; position: absolute; top: 50%; width: 38%; height: 1px; background: var(--border); }
+.entry-or::before { left: 0; } .entry-or::after { right: 0; }
+
+/* ===== 총관리자 화면 ===== */
+.admin-view { display: flex; flex-direction: column; gap: 1rem; }
+.admin-head { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; flex-wrap: wrap; padding: 0.3rem 0.2rem; }
+.admin-title { font-size: 1.3rem; font-weight: 800; }
+.admin-teacher-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 0.9rem; }
+.admin-teacher-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.atc-head { display: flex; align-items: center; gap: 0.6rem; }
+.atc-avatar { width: 44px; height: 44px; border-radius: 12px; flex: none; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 800; font-size: 1.2rem; }
+.atc-name { font-weight: 800; font-size: 1.05rem; }
+.atc-count { font-size: 0.82rem; }
+.atc-code { display: flex; align-items: center; gap: 0.5rem; background: #faf4ea; border: 1px dashed var(--border); border-radius: 10px; padding: 0.4rem 0.6rem; flex-wrap: wrap; }
+.atc-code .muted { font-size: 0.76rem; }
+.atc-code-val { font-weight: 800; letter-spacing: 1px; color: var(--navy); }
+.atc-actions { margin-top: auto; }
+.admin-foot { text-align: center; font-size: 0.8rem; padding: 0.3rem; }

@@ -36,6 +36,9 @@ router.post('/api/students/:id/code/regenerate', async (ctx) => accessSvc.regene
 // ---- 학생 읽기 전용 화면 ----
 router.get('/api/students/:id/public', async (ctx) => accessSvc.getStudentPublicView(num(ctx.params.id)));
 
+// ---- 총관리자: 전체 강사 관리 ----
+router.get('/api/admin/teachers', async () => ({ teachers: await accessSvc.adminListTeachers() }));
+
 // ---- 강사 ----
 router.get('/api/teachers', async () => ({ teachers: await teacherSvc.listTeachers() }));
 router.post('/api/teachers', async (ctx) => ({ teacher: await teacherSvc.createTeacher(ctx.body) }));

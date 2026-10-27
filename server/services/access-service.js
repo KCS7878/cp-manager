@@ -8,15 +8,27 @@ import { listInventory } from './shop-service.js';
 import { getRanking } from './ranking-service.js';
 import { NotFoundError, ValidationError } from '../lib/validation.js';
 
+// 총관리자 코드. 환경변수(CP_FULL_ADMIN_CODE)로 재정의 가능, 미설정 시 기본값.
+function fullAdminCode() {
+  const envCode = (typeof process !== 'undefined' && process.env && process.env.CP_FULL_ADMIN_CODE)
+    || (globalThis.__CP_FULL_ADMIN_CODE);
+  return (envCode || 'FULL_ADMIN').trim().toUpperCase();
+}
+
 /**
  * 접속 코드로 역할 판별.
- * @returns { role: 'teacher'|'student', teacher?, student? }
+ * @returns { role: 'admin'|'teacher'|'student', ... }
  */
 export async function resolveAccessCode(rawCode) {
   const code = String(rawCode || '').trim().toUpperCase();
   if (!code) throw new ValidationError('접속 코드를 입력해 주세요.');
-  const db = getDb();
 
+  // 총관리자 (숨겨진 코드)
+  if (code === fullAdminCode()) {
+    return { role: 'admin' };
+  }
+
+  const db = getDb();
   const teacher = await db.get('SELECT * FROM teachers WHERE access_code = ?', [code]);
   if (teacher) {
     return { role: 'teacher', teacher: { id: teacher.id, name: teacher.name, color: teacher.color } };
@@ -26,6 +38,18 @@ export async function resolveAccessCode(rawCode) {
     return { role: 'student', student: { id: student.id, name: student.name, teacher_id: student.teacher_id } };
   }
   throw new NotFoundError('해당 코드를 찾을 수 없습니다. 코드를 다시 확인해 주세요.');
+}
+
+/** 총관리자: 전체 강사 목록 (학생 수 + 코드 포함) */
+export async function adminListTeachers() {
+  const db = getDb();
+  const rows = await db.all(
+    `SELECT t.id, t.name, t.color, t.access_code,
+       (SELECT COUNT(*) FROM students s WHERE s.teacher_id = t.id AND s.archived = 0) AS student_count
+     FROM teachers t ORDER BY t.id`,
+    []
+  );
+  return rows;
 }
 
 /** 강사 코드 조회 (관리자 화면에서 공유용) */

@@ -6,10 +6,12 @@ const LS_ROLE = 'cp.lastRole';
 const LS_CODE = 'cp.lastCode';
 
 /**
- * onTeacher(teacher): 선생님 코드 확인 후 호출 (관리자 화면으로)
- * onStudent(studentId, resolved): 학생 코드 확인 후 호출 (읽기 전용 화면으로)
+ * onTeacher(teacher): 선생님 코드 확인 후 (관리자 화면으로)
+ * onStudent(studentId): 학생 코드 확인 후 (읽기 전용 화면으로)
+ * onAdmin(): 총관리자 코드 확인 후 (전체 강사 관리 화면으로)
+ * onNewTeacher(): 선생님 탭에서 "새 강사 만들기"
  */
-export function renderEntry(root, { onTeacher, onStudent }) {
+export function renderEntry(root, { onTeacher, onStudent, onAdmin, onNewTeacher }) {
   clear(root);
 
   let role = null; // 'teacher' | 'student'
@@ -46,6 +48,12 @@ export function renderEntry(root, { onTeacher, onStudent }) {
   const errBox = h('div', { class: 'entry-err', style: { display: 'none' } });
   const backBtn = h('button', { class: 'btn ghost', style: { width: '100%', marginTop: '0.4rem' }, onClick: () => pick(null) }, '← 역할 다시 선택');
 
+  // 선생님 탭 전용: "처음이신가요? 새 강사 만들기"
+  const newTeacherWrap = h('div', { class: 'entry-newteacher', style: { display: 'none' } },
+    h('div', { class: 'entry-or' }, '또는'),
+    h('button', { class: 'btn secondary', style: { width: '100%' }, onClick: () => onNewTeacher && onNewTeacher() }, '＋ 처음이신가요? 새 강사 만들기')
+  );
+
   codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); errBox.style.display = 'none'; });
 
@@ -53,6 +61,7 @@ export function renderEntry(root, { onTeacher, onStudent }) {
   codeWrap.appendChild(h('div', { class: 'field' }, codeInput));
   codeWrap.appendChild(errBox);
   codeWrap.appendChild(submitBtn);
+  codeWrap.appendChild(newTeacherWrap);
   codeWrap.appendChild(backBtn);
 
   function pick(r) {
@@ -67,6 +76,8 @@ export function renderEntry(root, { onTeacher, onStudent }) {
     codeInput.placeholder = r === 'teacher' ? '예: T-ABC123' : '예: S-ABC123';
     codeInput.value = '';
     errBox.style.display = 'none';
+    // 선생님 탭에서만 "새 강사 만들기" 노출
+    newTeacherWrap.style.display = r === 'teacher' ? '' : 'none';
     setTimeout(() => codeInput.focus(), 30);
   }
 
@@ -77,7 +88,13 @@ export function renderEntry(root, { onTeacher, onStudent }) {
     submitBtn.textContent = '확인 중...';
     try {
       const resolved = await api.post('/api/access/resolve', { code });
-      // 역할 불일치 안내
+      // 총관리자: 어느 탭에서 입력해도 진입 허용 (숨겨진 코드)
+      if (resolved.role === 'admin') {
+        try { localStorage.setItem(LS_ROLE, 'admin'); } catch {}
+        onAdmin && onAdmin();
+        return;
+      }
+      // 역할 불일치 안내 (선생님/학생)
       if (role && resolved.role !== role) {
         showErr(resolved.role === 'teacher'
           ? '이 코드는 선생님 코드입니다. "선생님"을 선택해 주세요.'
