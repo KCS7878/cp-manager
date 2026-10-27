@@ -1,5 +1,6 @@
 import { h, openModal, modalShell, toast, confirmDialog } from '../../ui.js';
 import { api } from '../../api.js';
+import { renderMonthlyBonus } from './monthly-bonus.js';
 
 const WORD_STATUS_LABEL = { none: '시험 없음', taken: '응시', noshow: '미응시', etc: '기타' };
 const ATT_LABEL = { present: '출석', late: '지각', absent: '결석' };
@@ -14,6 +15,7 @@ export function renderLessons(ctx) {
 
   if (!lessons.length) {
     wrap.appendChild(h('div', { class: 'empty' }, '수업 기록이 없습니다.'));
+    appendMonthlyBonus(wrap, ctx);
     return wrap;
   }
 
@@ -54,7 +56,16 @@ export function renderLessons(ctx) {
       h('tbody', {}, ...rows)
     )
   )));
+
+  // ── 월간 보너스 (기존 출결 관리 탭에서 이동) ──
+  appendMonthlyBonus(wrap, ctx);
   return wrap;
+}
+
+// 학습 기록 하단에 '월간 보너스' 소제목 + 표를 덧붙인다.
+function appendMonthlyBonus(wrap, ctx) {
+  wrap.appendChild(h('h3', { style: { marginTop: '1.2rem', marginBottom: '0.5rem' } }, '월간 보너스'));
+  wrap.appendChild(renderMonthlyBonus(ctx));
 }
 
 // 단어시험(응시/미응시)만 추려 최근 5회를 막대그래프로.

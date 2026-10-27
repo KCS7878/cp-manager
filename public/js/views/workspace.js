@@ -11,14 +11,13 @@ import { openBackup } from './backup.js';
 import { openWordWidget } from './word-widget.js';
 
 const SECTION_KEYS = [
-  'summary', 'ledger', 'coach', 'lessons', 'attendance', 'exams', 'rules', 'guide', 'shop',
+  'summary', 'ledger', 'coach', 'lessons', 'exams', 'rules', 'guide', 'shop',
 ];
 
 // 하단 내비게이션: 라벨/아이콘 -> 동작(섹션 펼치고 스크롤 or 모달)
 const NAV_ITEMS = [
   { key: 'summary', icon: '🏠', label: '대시보드', type: 'section' },
   { key: 'lessons', icon: '📘', label: '학습 기록', type: 'section' },
-  { key: 'attendance', icon: '✔', label: '출결', type: 'section' },
   { key: 'exams', icon: '◈', label: '내신 관리', type: 'section' },
   { key: 'ledger', icon: '◆', label: 'CP 지급 내역', type: 'section' },
   { key: 'remote', icon: '＋', label: 'CP 매니저 리모콘', type: 'remote' },

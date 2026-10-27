@@ -26,8 +26,10 @@ export function renderLedger(ctx) {
     )
   );
 
+  // 5개 초과 시 내부 스크롤(최근 5행 높이까지만 노출). 모바일 카드형에선 스크롤 제한 해제됨.
+  const scrollClass = ledger.length > 5 ? 'table-scroll rows-scroll-5' : 'table-scroll';
   return h('div', { class: 'card-table' },
-    h('div', { class: 'table-scroll' },
+    h('div', { class: scrollClass },
       h('table', { class: 'data' },
         h('thead', {}, h('tr', {},
           h('th', {}, '발생일'), h('th', {}, '금액'), h('th', {}, '사유'),
