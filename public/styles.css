@@ -625,3 +625,65 @@ table.data tr:hover td { background: #fffaf3; }
 /* 학생 화면 상점 교환 가능 표시 */
 .sv-afford { color: var(--sage); font-weight: 700; font-size: 0.82rem; margin-top: auto; }
 .sv-notafford { color: #a9b2bd; font-weight: 600; font-size: 0.8rem; margin-top: auto; }
+
+/* ---------- 학습 기록: 단어시험 점수 추이 막대그래프 ---------- */
+.word-chart {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #fffdf8;
+  padding: 0.8rem 0.9rem 0.6rem;
+  margin-bottom: 0.9rem;
+  box-shadow: var(--shadow);
+}
+.wc-head {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.6rem;
+}
+.wc-head strong { font-size: 0.95rem; color: var(--navy); }
+.wc-legend { font-size: 0.74rem; color: #6a7684; display: flex; align-items: center; gap: 0.2rem; }
+.wc-dot { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 0.15rem 0 0.5rem; vertical-align: middle; }
+/* 막대 색 */
+.bar-green { background: #4caf72; }
+.bar-orange { background: #e7a84d; }
+.bar-red { background: #d9534f; }
+
+.wc-plot {
+  position: relative;
+  display: flex; align-items: flex-end; gap: 0.5rem;
+  height: 160px;
+  padding: 0.2rem 0.2rem 0;
+  border-bottom: 2px solid var(--border);
+}
+/* 통과 기준선 */
+.wc-passline {
+  position: absolute; left: 0; right: 0;
+  border-top: 1px dashed rgba(32,48,71,0.35);
+  pointer-events: none;
+}
+.wc-passline::after {
+  content: '통과선'; position: absolute; right: 0; top: -0.9rem;
+  font-size: 0.65rem; color: #8a94a2;
+}
+.wc-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+.wc-bar-track { width: 100%; height: 100%; display: flex; align-items: flex-end; justify-content: center; }
+.wc-bar {
+  width: 70%; max-width: 34px; min-height: 4px;
+  border-radius: 6px 6px 0 0;
+  display: flex; align-items: flex-start; justify-content: center;
+  transition: height 0.3s ease;
+  position: relative;
+}
+.wc-val { font-size: 0.68rem; font-weight: 700; color: #fff; margin-top: 2px; text-shadow: 0 1px 1px rgba(0,0,0,0.25); }
+.wc-date { font-size: 0.68rem; color: #6a7684; margin-top: 0.25rem; white-space: nowrap; }
+
+/* ---------- 학습 기록 목록: 최근 10개 노출 + 내부 스크롤 ---------- */
+.lessons-scroll {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+/* 스크롤 시 헤더 고정 */
+.lessons-scroll table.data thead th {
+  position: sticky; top: 0; z-index: 1;
+}

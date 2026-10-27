@@ -6,6 +6,7 @@ const ATT_LABEL = { present: '출석', late: '지각', absent: '결석' };
 
 export function renderLessons(ctx) {
   const lessons = ctx.detail.lessons.filter((l) => !l.attendance_only);
+  const passScore = (ctx.detail.effectiveRules && ctx.detail.effectiveRules.word_pass_score) || 80;
   const wrap = h('div', {});
   wrap.appendChild(h('div', { class: 'btn-row', style: { marginBottom: '0.6rem' } },
     h('button', { class: 'btn sm', onClick: () => openLessonForm(ctx, null) }, '+ 수업 기록 추가')
@@ -16,6 +17,11 @@ export function renderLessons(ctx) {
     return wrap;
   }
 
+  // ── 최근 10회 단어시험 막대그래프 ──
+  const chart = renderWordChart(lessons, passScore);
+  if (chart) wrap.appendChild(chart);
+
+  // ── 학습 기록 목록: 최근 10개는 한눈에, 그 이상은 내부 스크롤 ──
   const rows = lessons.map((l) =>
     h('tr', {},
       h('td', {}, l.lesson_date),
@@ -33,7 +39,9 @@ export function renderLessons(ctx) {
     )
   );
 
-  wrap.appendChild(h('div', { class: 'table-scroll' },
+  // 10개 초과 시 내부 스크롤(최근 10행 높이까지만 노출)
+  const scrollClass = lessons.length > 10 ? 'table-scroll lessons-scroll' : 'table-scroll';
+  wrap.appendChild(h('div', { class: scrollClass },
     h('table', { class: 'data' },
       h('thead', {}, h('tr', {},
         h('th', {}, '수업일'), h('th', {}, '출결'), h('th', {}, '단어시험'),
@@ -41,7 +49,56 @@ export function renderLessons(ctx) {
       h('tbody', {}, ...rows)
     )
   ));
+  if (lessons.length > 10) {
+    wrap.appendChild(h('div', { class: 'hint', style: { marginTop: '0.3rem' } },
+      `최근 10개가 표시됩니다. 스크롤하면 나머지 ${lessons.length - 10}개를 볼 수 있습니다.`));
+  }
   return wrap;
+}
+
+// 단어시험(응시/미응시)만 추려 최근 10회를 막대그래프로.
+// 색: 통과=초록, 미달(기한내 미통과)=주황, 미응시·기한초과=빨강
+function renderWordChart(lessons, passScore) {
+  const tests = lessons.filter((l) => l.word_status === 'taken' || l.word_status === 'noshow');
+  if (!tests.length) return null;
+  // lessons 는 최신순 → 최근 10개 뽑아 과거→현재 순으로 뒤집어 그림
+  const recent = tests.slice(0, 10).reverse();
+
+  const bars = recent.map((l) => {
+    let cls, score, label;
+    if (l.word_status === 'noshow') {
+      cls = 'bar-red'; score = 0; label = '미응시';
+    } else {
+      score = Number(l.word_score) || 0;
+      if (!l.deadline_met) { cls = 'bar-red'; label = `${score}점·기한초과`; }
+      else if (score >= passScore) { cls = 'bar-green'; label = `${score}점·통과`; }
+      else { cls = 'bar-orange'; label = `${score}점·미달`; }
+    }
+    const heightPct = Math.max(4, score); // 0점도 최소 높이로 보이게
+    return h('div', { class: 'wc-col', title: `${l.lesson_date} · ${label}` },
+      h('div', { class: 'wc-bar-track' },
+        h('div', { class: `wc-bar ${cls}`, style: { height: heightPct + '%' } },
+          h('span', { class: 'wc-val' }, l.word_status === 'noshow' ? '—' : String(score))
+        )
+      ),
+      h('div', { class: 'wc-date' }, (l.lesson_date || '').slice(5)) // MM-DD
+    );
+  });
+
+  return h('div', { class: 'word-chart' },
+    h('div', { class: 'wc-head' },
+      h('strong', {}, '최근 단어시험 점수 추이'),
+      h('span', { class: 'wc-legend' },
+        h('span', { class: 'wc-dot bar-green' }), '통과 ',
+        h('span', { class: 'wc-dot bar-orange' }), '미달 ',
+        h('span', { class: 'wc-dot bar-red' }), '미응시·기한초과',
+      )
+    ),
+    h('div', { class: 'wc-plot' },
+      h('div', { class: 'wc-passline', style: { bottom: passScore + '%' }, title: `통과 기준 ${passScore}점` }),
+      ...bars
+    )
+  );
 }
 
 export function openLessonForm(ctx, lesson, opts = {}) {
@@ -123,40 +180,64 @@ function openClassRecordForm(ctx, lesson, { isCount }) {
 // ─────────────────────────────────────────────────────────────
 function openWordExamForm(ctx, lesson, { isCount }) {
   const student = ctx.student;
+  // 이 기록의 입력 방식 초기값: 기존 기록이면 저장 방식 추정(틀린 개수가 있으면 개수제),
+  // 신규면 학생 기본 설정(isCount)을 따른다.
+  let initialMode;
+  if (lesson) initialMode = (lesson.word_wrong !== null && lesson.word_wrong !== undefined) ? 'count' : 'score';
+  else initialMode = isCount ? 'count' : 'score';
 
   openModal((close) => {
     const field = (label, el, hint) => h('div', { class: 'field' }, h('label', {}, label), el, hint ? h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, hint) : null);
     const f = {};
     f.lesson_date = h('input', { type: 'date', value: lesson?.lesson_date || today() });
+    f.input_mode = selEl(['score|점수제', 'count|개수제'], initialMode);
     f.word_range = h('input', { value: lesson?.word_range || '', placeholder: '예: Day 20~21, 중간고사 범위 1차' });
     f.word_seen = h('input', { type: 'number', min: '0', value: lesson?.word_seen ?? '' });
-    f.word_wrong = h('input', { type: 'number', min: '0', value: lesson?.word_wrong ?? '' });
+    // 개수제: '맞은 단어 개수'를 입력받는다. 기존 기록이면 본-틀림으로 역산.
+    const initCorrect = (lesson && lesson.word_seen != null && lesson.word_wrong != null)
+      ? Math.max(0, lesson.word_seen - lesson.word_wrong) : '';
+    f.word_correct = h('input', { type: 'number', min: '0', value: initCorrect });
     f.word_score = h('input', { type: 'number', min: '0', max: '100', value: lesson?.word_score ?? '' });
     f.deadline_met = selEl(['1|기한 내 준수', '0|기한 초과'], String(lesson?.deadline_met ?? 1));
     f.weakness = h('textarea', {}, lesson?.weakness || '');
 
-    const scoreBox = h('div', { class: 'form-grid' });
-    if (isCount) {
-      scoreBox.appendChild(field('본 단어 수', f.word_seen));
-      scoreBox.appendChild(field('틀린 단어 수', f.word_wrong));
-    } else {
-      scoreBox.appendChild(field('본 단어 수', f.word_seen));
-      scoreBox.appendChild(field('점수 (0~100)', f.word_score));
+    // 모드별 입력칸: 점수제=본단어수+점수 / 개수제=본단어수+맞은개수
+    const seenWrap = field('본 단어 수', f.word_seen);
+    const scoreWrap = field('점수 (0~100)', f.word_score);
+    const correctWrap = field('맞은 단어 개수', f.word_correct);
+    const modeHint = h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, '');
+
+    function refreshMode() {
+      const count = f.input_mode.value === 'count';
+      correctWrap.style.display = count ? '' : 'none';
+      scoreWrap.style.display = count ? 'none' : '';
+      modeHint.textContent = count
+        ? '개수제: 본 단어 수와 맞은 단어 개수를 입력하면 점수가 자동 계산됩니다.'
+        : '점수제: 본 단어 수와 0~100 점수를 직접 입력합니다.';
     }
+    f.input_mode.onchange = refreshMode;
+    setTimeout(refreshMode, 0);
 
     const save = async () => {
+      const count = f.input_mode.value === 'count';
       const body = {
         lesson_date: f.lesson_date.value,
         word_status: 'taken',
+        word_input_mode: count ? 'count' : 'score',
         word_range: f.word_range.value,
         deadline_met: Number(f.deadline_met.value),
         weakness: f.weakness.value,
       };
-      if (isCount) {
-        body.word_seen = f.word_seen.value ? Number(f.word_seen.value) : null;
-        body.word_wrong = f.word_wrong.value ? Number(f.word_wrong.value) : 0;
+      const seen = f.word_seen.value ? Number(f.word_seen.value) : null;
+      body.word_seen = seen;
+      if (count) {
+        // 서버는 '틀린 개수'로 저장/환산하므로 맞은 개수를 틀린 개수로 변환
+        if (seen == null) return toast('개수제에서는 본 단어 수를 입력해야 합니다.', 'error');
+        const correct = f.word_correct.value !== '' ? Number(f.word_correct.value) : null;
+        if (correct == null) return toast('개수제에서는 맞은 단어 개수를 입력해야 합니다.', 'error');
+        if (correct > seen) return toast('맞은 단어 개수가 본 단어 수보다 많을 수 없습니다.', 'error');
+        body.word_wrong = seen - correct;
       } else {
-        body.word_seen = f.word_seen.value ? Number(f.word_seen.value) : null;
         body.word_score = f.word_score.value !== '' ? Number(f.word_score.value) : null;
       }
       try {
@@ -171,10 +252,10 @@ function openWordExamForm(ctx, lesson, { isCount }) {
     return modalShell({
       title: lesson ? '단어시험 기록 수정' : '✏️ 단어시험 입력', close,
       body: h('div', {},
-        h('div', { class: 'hint', style: { marginBottom: '0.6rem' } }, `단어 입력 방식: ${isCount ? '개수제 (틀린 개수로 자동 환산)' : '점수제'}`),
-        h('div', { class: 'form-grid' }, field('단어시험 응시일 *', f.lesson_date)),
+        h('div', { class: 'form-grid' }, field('단어시험 응시일 *', f.lesson_date), field('채점 방식', f.input_mode)),
+        modeHint,
         field('단어시험 범위 (자유 입력)', f.word_range),
-        scoreBox,
+        h('div', { class: 'form-grid' }, seenWrap, scoreWrap, correctWrap),
         field('마감 기한', f.deadline_met),
         field('틀린 단어', f.weakness),
       ),
