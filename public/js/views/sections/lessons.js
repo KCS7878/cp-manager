@@ -47,7 +47,18 @@ export function renderLessons(ctx) {
 export function openLessonForm(ctx, lesson, opts = {}) {
   const student = ctx.student;
   const isCount = student.word_input_mode === 'count';
-  const wordFocus = opts.focus === 'word'; // 단어시험 빠른 진입이면 단어시험을 기본 '응시'로
+  // 모드 판별: 빠른진입 focus='word' 이거나, 기존 기록이 단어시험 응시 기록이면 단어시험 모드
+  const isWordMode = opts.focus === 'word' || (lesson && lesson.word_status === 'taken');
+
+  if (isWordMode) return openWordExamForm(ctx, lesson, { isCount });
+  return openClassRecordForm(ctx, lesson, { isCount });
+}
+
+// ─────────────────────────────────────────────────────────────
+// 수업 기록 폼: 단어시험 상태 없음, 진도/방향 통합
+// ─────────────────────────────────────────────────────────────
+function openClassRecordForm(ctx, lesson, { isCount }) {
+  const student = ctx.student;
 
   openModal((close) => {
     const field = (label, el, hint) => h('div', { class: 'field' }, h('label', {}, label), el, hint ? h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, hint) : null);
@@ -55,69 +66,32 @@ export function openLessonForm(ctx, lesson, opts = {}) {
     f.lesson_date = h('input', { type: 'date', value: lesson?.lesson_date || today() });
     f.attendance = selEl(['present|출석', 'late|지각', 'absent|결석'], lesson?.attendance || 'present');
     f.late_minutes = h('input', { type: 'number', min: '0', value: lesson?.late_minutes || 0 });
-    f.word_status = selEl(['none|시험 없음', 'taken|응시', 'noshow|미응시', 'etc|기타'], lesson?.word_status || (wordFocus ? 'taken' : 'none'));
-    f.word_etc_reason = h('input', { value: lesson?.word_etc_reason || '', placeholder: '기타 사유 (필수)' });
-    f.word_range = h('input', { value: lesson?.word_range || '', placeholder: '예: Day 20~21, 중간고사 범위 1차' });
-    f.word_seen = h('input', { type: 'number', min: '0', value: lesson?.word_seen ?? '' });
-    f.word_wrong = h('input', { type: 'number', min: '0', value: lesson?.word_wrong ?? '' });
-    f.word_score = h('input', { type: 'number', min: '0', max: '100', value: lesson?.word_score ?? '' });
-    f.deadline_met = selEl(['1|기한 내 준수', '0|기한 초과'], String(lesson?.deadline_met ?? 1));
-    f.progress_today = h('textarea', {}, lesson?.progress_today || '');
-    f.next_direction = h('textarea', {}, lesson?.next_direction || '');
+    // 기존 데이터 호환: progress_today + next_direction 이 따로 저장돼 있으면 합쳐서 표시
+    const mergedProgress = [lesson?.progress_today, lesson?.next_direction].filter((v) => v && v.trim()).join('\n');
+    f.progress_today = h('textarea', {}, mergedProgress);
     f.weakness = h('textarea', {}, lesson?.weakness || '');
     f.homework = h('textarea', {}, lesson?.homework || '');
     f.progress_rate = h('input', { type: 'number', min: '0', max: '100', value: lesson?.progress_rate ?? '' });
 
     const lateWrap = field('지각 시간(분)', f.late_minutes);
-    const etcWrap = field('기타 사유', f.word_etc_reason, '첫 수업, 시험 범위 미지정 등. CP는 변동하지 않습니다.');
-    const scoreBox = h('div', { class: 'form-grid' });
-    const rangeWrap = field('단어시험 범위 (자유 입력)', f.word_range);
-    const deadlineWrap = field('마감 기한', f.deadline_met);
-
     function refreshVisibility() {
       lateWrap.style.display = f.attendance.value === 'late' ? '' : 'none';
-      const ws = f.word_status.value;
-      etcWrap.style.display = ws === 'etc' ? '' : 'none';
-      const showWord = ws === 'taken';
-      scoreBox.style.display = showWord ? '' : 'none';
-      rangeWrap.style.display = ws === 'none' ? 'none' : '';
-      deadlineWrap.style.display = showWord ? '' : 'none';
     }
     f.attendance.onchange = refreshVisibility;
-    f.word_status.onchange = refreshVisibility;
-
-    if (isCount) {
-      scoreBox.appendChild(field('본 단어 수', f.word_seen));
-      scoreBox.appendChild(field('틀린 단어 수', f.word_wrong));
-    } else {
-      scoreBox.appendChild(field('본 단어 수', f.word_seen));
-      scoreBox.appendChild(field('점수 (0~100)', f.word_score));
-    }
 
     const save = async () => {
       const body = {
         lesson_date: f.lesson_date.value,
         attendance: f.attendance.value,
         late_minutes: Number(f.late_minutes.value) || 0,
-        word_status: f.word_status.value,
-        word_etc_reason: f.word_etc_reason.value,
-        word_range: f.word_range.value,
-        deadline_met: Number(f.deadline_met.value),
+        // 응시(taken)가 아닌 기존 단어상태(none/noshow/etc)는 보존, 신규는 none
+        word_status: lesson ? (lesson.word_status === 'taken' ? 'none' : lesson.word_status) : 'none',
         progress_today: f.progress_today.value,
-        next_direction: f.next_direction.value,
+        next_direction: '', // 통합 필드로 대체 — 별도 다음 수업 방향은 사용하지 않음
         weakness: f.weakness.value,
         homework: f.homework.value,
         progress_rate: f.progress_rate.value ? Number(f.progress_rate.value) : null,
       };
-      if (f.word_status.value === 'taken') {
-        if (isCount) {
-          body.word_seen = f.word_seen.value ? Number(f.word_seen.value) : null;
-          body.word_wrong = f.word_wrong.value ? Number(f.word_wrong.value) : 0;
-        } else {
-          body.word_seen = f.word_seen.value ? Number(f.word_seen.value) : null;
-          body.word_score = f.word_score.value !== '' ? Number(f.word_score.value) : null;
-        }
-      }
       try {
         if (lesson) await api.put(`/api/lessons/${lesson.id}`, body);
         else await api.post(`/api/students/${student.id}/lessons`, body);
@@ -130,18 +104,79 @@ export function openLessonForm(ctx, lesson, opts = {}) {
     setTimeout(refreshVisibility, 0);
 
     return modalShell({
-      title: lesson ? '수업 기록 수정' : (wordFocus ? '✏️ 단어시험 입력' : '📖 수업 기록 추가'), close,
+      title: lesson ? '수업 기록 수정' : '📖 수업 기록 추가', close,
       body: h('div', {},
-        h('div', { class: 'hint', style: { marginBottom: '0.6rem' } }, `단어 입력 방식: ${isCount ? '개수제 (틀린 개수로 자동 환산)' : '점수제'}`),
         h('div', { class: 'form-grid' }, field('수업일 *', f.lesson_date), field('출결', f.attendance)),
         lateWrap,
-        h('div', { class: 'form-grid' }, field('단어시험 상태', f.word_status)),
-        etcWrap, rangeWrap, scoreBox, deadlineWrap,
         field('진도율(%)', f.progress_rate),
-        field('이번 수업 진도', f.progress_today),
-        field('다음 수업 방향', f.next_direction),
+        field('이번 수업 진도 및 다음 수업 방향', f.progress_today),
         field('확인된 약점', f.weakness),
         field('숙제', f.homework),
+      ),
+      footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '저장')],
+    });
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+// 단어시험 폼: 응시 전제, 수업 관련 필드 없음
+// ─────────────────────────────────────────────────────────────
+function openWordExamForm(ctx, lesson, { isCount }) {
+  const student = ctx.student;
+
+  openModal((close) => {
+    const field = (label, el, hint) => h('div', { class: 'field' }, h('label', {}, label), el, hint ? h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, hint) : null);
+    const f = {};
+    f.lesson_date = h('input', { type: 'date', value: lesson?.lesson_date || today() });
+    f.word_range = h('input', { value: lesson?.word_range || '', placeholder: '예: Day 20~21, 중간고사 범위 1차' });
+    f.word_seen = h('input', { type: 'number', min: '0', value: lesson?.word_seen ?? '' });
+    f.word_wrong = h('input', { type: 'number', min: '0', value: lesson?.word_wrong ?? '' });
+    f.word_score = h('input', { type: 'number', min: '0', max: '100', value: lesson?.word_score ?? '' });
+    f.deadline_met = selEl(['1|기한 내 준수', '0|기한 초과'], String(lesson?.deadline_met ?? 1));
+    f.weakness = h('textarea', {}, lesson?.weakness || '');
+
+    const scoreBox = h('div', { class: 'form-grid' });
+    if (isCount) {
+      scoreBox.appendChild(field('본 단어 수', f.word_seen));
+      scoreBox.appendChild(field('틀린 단어 수', f.word_wrong));
+    } else {
+      scoreBox.appendChild(field('본 단어 수', f.word_seen));
+      scoreBox.appendChild(field('점수 (0~100)', f.word_score));
+    }
+
+    const save = async () => {
+      const body = {
+        lesson_date: f.lesson_date.value,
+        word_status: 'taken',
+        word_range: f.word_range.value,
+        deadline_met: Number(f.deadline_met.value),
+        weakness: f.weakness.value,
+      };
+      if (isCount) {
+        body.word_seen = f.word_seen.value ? Number(f.word_seen.value) : null;
+        body.word_wrong = f.word_wrong.value ? Number(f.word_wrong.value) : 0;
+      } else {
+        body.word_seen = f.word_seen.value ? Number(f.word_seen.value) : null;
+        body.word_score = f.word_score.value !== '' ? Number(f.word_score.value) : null;
+      }
+      try {
+        if (lesson) await api.put(`/api/lessons/${lesson.id}`, body);
+        else await api.post(`/api/students/${student.id}/lessons`, body);
+        toast('저장되었습니다. CP가 재계산되었습니다.', 'success');
+        close();
+        ctx.reload();
+      } catch (e) { toast(e.message, 'error'); }
+    };
+
+    return modalShell({
+      title: lesson ? '단어시험 기록 수정' : '✏️ 단어시험 입력', close,
+      body: h('div', {},
+        h('div', { class: 'hint', style: { marginBottom: '0.6rem' } }, `단어 입력 방식: ${isCount ? '개수제 (틀린 개수로 자동 환산)' : '점수제'}`),
+        h('div', { class: 'form-grid' }, field('단어시험 응시일 *', f.lesson_date)),
+        field('단어시험 범위 (자유 입력)', f.word_range),
+        scoreBox,
+        field('마감 기한', f.deadline_met),
+        field('틀린 단어', f.weakness),
       ),
       footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '저장')],
     });
