@@ -1,6 +1,19 @@
 // API 클라이언트: 타임아웃, 오류 구분, 중복 요청 방지.
 const DEFAULT_TIMEOUT = 15000;
 
+// 총관리자(full admin) 코드. admin 전용 API 호출 시 x-admin-code 헤더로 전송된다.
+// 세션 한정(sessionStorage): 탭을 닫으면 사라지며, 학생/선생님 모드에선 설정되지 않는다.
+let adminCode = null;
+try { adminCode = sessionStorage.getItem('cp.adminCode') || null; } catch {}
+export function setAdminCode(code) {
+  adminCode = code || null;
+  try {
+    if (adminCode) sessionStorage.setItem('cp.adminCode', adminCode);
+    else sessionStorage.removeItem('cp.adminCode');
+  } catch {}
+}
+export function hasAdminCode() { return !!adminCode; }
+
 // 진행 중 요청 추적 (같은 key 중복 실행 방지 / 이전 요청 취소)
 const inflight = new Map();
 
@@ -50,9 +63,12 @@ export async function request(method, path, opts = {}) {
   const exec = (async () => {
     let res;
     try {
+      const headers = {};
+      if (body) headers['Content-Type'] = 'application/json';
+      if (adminCode) headers['x-admin-code'] = adminCode; // 총관리자 전용 API 인증
       res = await fetch(url, {
         method,
-        headers: body ? { 'Content-Type': 'application/json' } : undefined,
+        headers: Object.keys(headers).length ? headers : undefined,
         body: body ? JSON.stringify(body) : undefined,
         signal: controller.signal,
       });

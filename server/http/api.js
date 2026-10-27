@@ -36,14 +36,15 @@ router.post('/api/students/:id/code/regenerate', async (ctx) => accessSvc.regene
 // ---- 학생 읽기 전용 화면 ----
 router.get('/api/students/:id/public', async (ctx) => accessSvc.getStudentPublicView(num(ctx.params.id)));
 
-// ---- 총관리자: 전체 강사 관리 ----
-router.get('/api/admin/teachers', async () => ({ teachers: await accessSvc.adminListTeachers() }));
+// ---- 총관리자: 전체 강사 관리 (총관리자 코드 필요) ----
+router.get('/api/admin/teachers', async (ctx) => { accessSvc.assertAdmin(ctx.req); return { teachers: await accessSvc.adminListTeachers() }; });
 
 // ---- 강사 ----
 router.get('/api/teachers', async () => ({ teachers: await teacherSvc.listTeachers() }));
-router.post('/api/teachers', async (ctx) => ({ teacher: await teacherSvc.createTeacher(ctx.body) }));
+// 강사 생성·삭제는 총관리자 전용 (학생/일반 사용자의 무단 생성·삭제 차단)
+router.post('/api/teachers', async (ctx) => { accessSvc.assertAdmin(ctx.req); return { teacher: await teacherSvc.createTeacher(ctx.body) }; });
 router.put('/api/teachers/:id', async (ctx) => ({ teacher: await teacherSvc.updateTeacher(num(ctx.params.id), ctx.body) }));
-router.delete('/api/teachers/:id', async (ctx) => teacherSvc.deleteTeacher(num(ctx.params.id)));
+router.delete('/api/teachers/:id', async (ctx) => { accessSvc.assertAdmin(ctx.req); return teacherSvc.deleteTeacher(num(ctx.params.id)); });
 
 // 강사 규칙
 router.get('/api/teachers/:id/rules', async (ctx) => ({ rules: await rulesSvc.getTeacherRules(getDb(), num(ctx.params.id)) }));

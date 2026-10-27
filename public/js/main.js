@@ -1,4 +1,4 @@
-import { api, ApiError } from './api.js';
+import { api, ApiError, setAdminCode } from './api.js';
 import { h, clear, toast, errorEl, loadingEl } from './ui.js';
 import {
   state, saveLastTeacher, loadLastTeacher, saveTeacherCache, loadTeacherCache,
@@ -29,7 +29,6 @@ export const App = {
       onTeacher: (teacher) => this.enterTeacherModeWith(teacher),
       onStudent: (studentId) => this.enterStudentMode(studentId),
       onAdmin: () => this.enterAdminMode(),
-      onNewTeacher: () => this.createFirstTeacher(),
     });
   },
 
@@ -41,33 +40,6 @@ export const App = {
     renderAdminView(appEl, {
       onEnterTeacher: (t) => this.enterTeacherModeWith(t),
       onExit: () => this.exitToEntry(),
-    });
-  },
-
-  // "새 강사 만들기" (빈 상태에서 첫 강사 생성)
-  async createFirstTeacher() {
-    const { h, openModal, modalShell, toast } = await import('./ui.js');
-    openModal((close) => {
-      const name = h('input', { placeholder: '강사 이름 (예: 김영어)' });
-      const color = h('input', { type: 'color', value: '#ee735a' });
-      const save = async () => {
-        if (!name.value.trim()) { toast('강사 이름을 입력하세요.', 'error'); return; }
-        try {
-          const { teacher } = await api.post('/api/teachers', { name: name.value, color: color.value });
-          toast('강사가 생성되었습니다! 바로 관리 화면으로 들어갑니다.', 'success');
-          close();
-          this.enterTeacherModeWith(teacher);
-        } catch (e) { toast(e.message, 'error'); }
-      };
-      return modalShell({
-        title: '새 강사 만들기', close,
-        body: h('div', {},
-          h('p', { class: 'muted' }, '처음 시작하시는군요! 강사(선생님) 이름을 입력하면 바로 관리 화면으로 들어갑니다. 접속 코드는 자동 발급됩니다.'),
-          h('div', { class: 'field' }, h('label', {}, '강사 이름'), name),
-          h('div', { class: 'field' }, h('label', {}, '카드 색상'), color),
-        ),
-        footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '만들고 시작')],
-      });
     });
   },
 
@@ -92,6 +64,7 @@ export const App = {
 
   exitToEntry() {
     try { localStorage.removeItem('cp.lastCode'); } catch {}
+    setAdminCode(null); // 총관리자 세션 종료
     state.teacher = null;
     window.__cpTeacher = null;
     this.showEntry();

@@ -16,6 +16,22 @@ function fullAdminCode() {
 }
 
 /**
+ * 총관리자 권한 검증. admin 전용 엔드포인트에서 호출한다.
+ * 요청 헤더 x-admin-code 가 총관리자 코드와 일치하지 않으면 403.
+ * (프런트에서 버튼을 숨겨도 API 직접 호출로 우회되는 것을 막는다.)
+ */
+export function assertAdmin(req) {
+  const header = req && req.headers ? (req.headers['x-admin-code'] || req.headers['X-Admin-Code']) : null;
+  const code = String(header || '').trim().toUpperCase();
+  if (!code || code !== fullAdminCode()) {
+    const err = new ValidationError('이 기능은 총관리자만 사용할 수 있습니다.');
+    err.status = 403;
+    err.code = 'FORBIDDEN';
+    throw err;
+  }
+}
+
+/**
  * 접속 코드로 역할 판별.
  * @returns { role: 'admin'|'teacher'|'student', ... }
  */
