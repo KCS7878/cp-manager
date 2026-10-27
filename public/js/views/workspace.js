@@ -11,7 +11,7 @@ import { openBackup } from './backup.js';
 import { openWordWidget } from './word-widget.js';
 
 const SECTION_KEYS = [
-  'summary', 'ledger', 'coach', 'lessons', 'exams', 'rules', 'guide', 'shop',
+  'summary', 'lessons', 'exams', 'coach', 'ledger', 'guide', 'rules', 'shop',
 ];
 
 // 하단 내비게이션: 라벨/아이콘 -> 동작(섹션 펼치고 스크롤 or 모달)
