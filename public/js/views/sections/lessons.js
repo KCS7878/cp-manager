@@ -1,4 +1,4 @@
-import { h, openModal, modalShell, toast, confirmDialog } from '../../ui.js';
+import { h, openModal, modalShell, toast, confirmDialog, toggleSwitch } from '../../ui.js';
 import { api } from '../../api.js';
 import { renderMonthlyBonus } from './monthly-bonus.js';
 
@@ -203,12 +203,17 @@ function openWordExamForm(ctx, lesson, { isCount }) {
   let initialMode;
   if (lesson) initialMode = (lesson.word_wrong !== null && lesson.word_wrong !== undefined) ? 'count' : 'score';
   else initialMode = isCount ? 'count' : 'score';
+  // 응시 여부 초기값: 기존 기록이 noshow면 미응시, 아니면 응시
+  const initialTaken = lesson?.word_status === 'noshow' ? 'no' : 'yes';
 
   openModal((close) => {
     const field = (label, el, hint) => h('div', { class: 'field' }, h('label', {}, label), el, hint ? h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, hint) : null);
     const f = {};
     f.lesson_date = h('input', { type: 'date', value: lesson?.lesson_date || today() });
-    f.input_mode = selEl(['score|점수제', 'count|개수제'], initialMode);
+    // 응시 여부 토글 (응시 / 미응시)
+    f.taken = toggleSwitch([['yes', '응시'], ['no', '미응시']], initialTaken, () => refreshAll());
+    // 채점 방식 토글 (점수제 / 개수제)
+    f.input_mode = toggleSwitch([['score', '점수제'], ['count', '개수제']], initialMode, () => refreshMode());
     f.word_range = h('input', { value: lesson?.word_range || '', placeholder: '예: Day 20~21, 중간고사 범위 1차' });
     f.word_seen = h('input', { type: 'number', min: '0', value: lesson?.word_seen ?? '' });
     // 개수제: '맞은 단어 개수'를 입력받는다. 기존 기록이면 본-틀림으로 역산.
@@ -219,10 +224,15 @@ function openWordExamForm(ctx, lesson, { isCount }) {
     f.deadline_met = selEl(['1|기한 내 준수', '0|기한 초과'], String(lesson?.deadline_met ?? 1));
     f.weakness = h('textarea', {}, lesson?.weakness || '');
 
+    // 채점 방식 줄 (미응시면 통째로 숨김)
+    const modeRow = field('채점 방식', f.input_mode);
     // 모드별 입력칸: 점수제=본단어수+점수 / 개수제=본단어수+맞은개수
     const seenWrap = field('본 단어 수', f.word_seen);
     const scoreWrap = field('점수 (0~100)', f.word_score);
     const correctWrap = field('맞은 단어 개수', f.word_correct);
+    const scoreRow = h('div', { class: 'form-grid' }, seenWrap, scoreWrap, correctWrap);
+    const deadlineWrap = field('마감 기한', f.deadline_met);
+    const weaknessWrap = field('틀린 단어', f.weakness);
     const modeHint = h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, '');
 
     function refreshMode() {
@@ -233,10 +243,39 @@ function openWordExamForm(ctx, lesson, { isCount }) {
         ? '개수제: 본 단어 수와 맞은 단어 개수를 입력하면 점수가 자동 계산됩니다.'
         : '점수제: 본 단어 수와 0~100 점수를 직접 입력합니다.';
     }
-    f.input_mode.onchange = refreshMode;
-    setTimeout(refreshMode, 0);
+    // 미응시면 채점/점수/마감/틀린단어 입력을 모두 숨긴다 (미응시 패널티만 적용)
+    function refreshAll() {
+      const taken = f.taken.value === 'yes';
+      for (const el of [modeRow, scoreRow, deadlineWrap, weaknessWrap, modeHint]) {
+        el.style.display = taken ? '' : 'none';
+      }
+      if (taken) refreshMode();
+    }
+    setTimeout(refreshAll, 0);
 
     const save = async () => {
+      const taken = f.taken.value === 'yes';
+      if (!taken) {
+        // 미응시: 점수/채점 없이 상태만 noshow 로 저장
+        const body = {
+          lesson_date: f.lesson_date.value,
+          word_status: 'noshow',
+          word_range: f.word_range.value,
+          // 미응시는 점수/개수가 없으므로 기존 잔존값을 비운다
+          word_seen: null,
+          word_wrong: null,
+          word_score: null,
+        };
+        try {
+          if (lesson) await api.put(`/api/lessons/${lesson.id}`, body);
+          else await api.post(`/api/students/${student.id}/lessons`, body);
+          toast('미응시로 저장되었습니다. CP가 재계산되었습니다.', 'success');
+          close();
+          ctx.reload();
+        } catch (e) { toast(e.message, 'error'); }
+        return;
+      }
+
       const count = f.input_mode.value === 'count';
       const body = {
         lesson_date: f.lesson_date.value,
@@ -270,12 +309,13 @@ function openWordExamForm(ctx, lesson, { isCount }) {
     return modalShell({
       title: lesson ? '단어시험 기록 수정' : '✏️ 단어시험 입력', close,
       body: h('div', {},
-        h('div', { class: 'form-grid' }, field('단어시험 응시일 *', f.lesson_date), field('채점 방식', f.input_mode)),
+        h('div', { class: 'form-grid' }, field('단어시험 응시일 *', f.lesson_date), field('응시 여부', f.taken)),
+        modeRow,
         modeHint,
         field('단어시험 범위 (자유 입력)', f.word_range),
-        h('div', { class: 'form-grid' }, seenWrap, scoreWrap, correctWrap),
-        field('마감 기한', f.deadline_met),
-        field('틀린 단어', f.weakness),
+        scoreRow,
+        deadlineWrap,
+        weaknessWrap,
       ),
       footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '저장')],
     });

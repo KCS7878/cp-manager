@@ -19,6 +19,46 @@ export function h(tag, props = {}, ...children) {
 
 export function clear(el) { while (el.firstChild) el.removeChild(el.firstChild); return el; }
 
+/**
+ * 2-상태 토글 스위치. 좌/우 라벨과 값을 받아 슬라이드 토글을 만든다.
+ * options: [[leftValue, leftLabel], [rightValue, rightLabel]]
+ * current: 현재 선택된 value (없으면 왼쪽)
+ * onChange(value): 전환 시 호출
+ * 반환 엘리먼트는 getter `.value` 로 현재 선택값을 제공한다.
+ */
+export function toggleSwitch(options, current, onChange) {
+  const [[lv, ll], [rv, rl]] = options;
+  let value = current === rv ? rv : lv;
+
+  const leftLabel = h('span', { class: 'ts-label' }, ll);
+  const rightLabel = h('span', { class: 'ts-label' }, rl);
+  const knob = h('span', { class: 'ts-knob' });
+  const track = h('div', { class: 'ts-track', role: 'switch', tabindex: '0' }, knob);
+  const wrap = h('div', { class: 'toggle-switch' }, leftLabel, track, rightLabel);
+
+  function apply() {
+    const isRight = value === rv;
+    wrap.classList.toggle('is-right', isRight);
+    leftLabel.classList.toggle('on', !isRight);
+    rightLabel.classList.toggle('on', isRight);
+    track.setAttribute('aria-checked', isRight ? 'true' : 'false');
+  }
+  function toggle() {
+    value = value === lv ? rv : lv;
+    apply();
+    if (onChange) onChange(value);
+  }
+  track.addEventListener('click', toggle);
+  track.addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); } });
+  // 라벨 클릭 시 해당 값으로 직접 전환
+  leftLabel.addEventListener('click', () => { if (value !== lv) toggle(); });
+  rightLabel.addEventListener('click', () => { if (value !== rv) toggle(); });
+  apply();
+
+  Object.defineProperty(wrap, 'value', { get: () => value });
+  return wrap;
+}
+
 export function esc(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
