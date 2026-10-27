@@ -46,7 +46,11 @@ async function parseLessonBody(db, studentId, body, existing = {}) {
   }
 
   // 단어 점수 계산 (개수제면 환산)
-  const mode = student.word_input_mode; // 'count' | 'score'
+  // 요청 body에 word_input_mode 가 있으면 그 기록의 입력 방식을 우선 적용(레코드별 선택 존중).
+  // 없으면 학생 기본 설정을 사용한다.
+  const mode = body.word_input_mode !== undefined
+    ? requireEnum(body.word_input_mode, '단어 입력 방식', ['count', 'score'])
+    : student.word_input_mode; // 'count' | 'score'
   let wordSeen = body.word_seen !== undefined ? optInt(body.word_seen, '본 단어 수', { min: 0, max: 100000 }) : existing.word_seen;
   let wordWrong = body.word_wrong !== undefined ? optInt(body.word_wrong, '틀린 단어 수', { min: 0, max: 100000 }) : existing.word_wrong;
   let wordScore = body.word_score !== undefined ? optInt(body.word_score, '점수', { min: 0, max: 100 }) : existing.word_score;

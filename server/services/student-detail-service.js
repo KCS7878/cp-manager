@@ -7,7 +7,7 @@ import { listLessons } from './lesson-service.js';
 import { listExams, analyzeExams } from './exam-service.js';
 import { listMonthlyBonuses } from './bonus-service.js';
 import { listInventory } from './shop-service.js';
-import { getStudentOverride } from './rules-service.js';
+import { getStudentOverride, getEffectiveRules } from './rules-service.js';
 
 export async function getStudentDetail(studentId) {
   const db = getDb();
@@ -15,6 +15,7 @@ export async function getStudentDetail(studentId) {
   return {
     student,
     override: await getStudentOverride(db, studentId),
+    effectiveRules: await getEffectiveRules(db, student.teacher_id, studentId),
     ledger: await getLedger(db, studentId),
     lessons: await listLessons(studentId),
     exams: await listExams(studentId),
