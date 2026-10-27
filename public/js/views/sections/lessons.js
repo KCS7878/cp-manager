@@ -44,9 +44,10 @@ export function renderLessons(ctx) {
   return wrap;
 }
 
-export function openLessonForm(ctx, lesson) {
+export function openLessonForm(ctx, lesson, opts = {}) {
   const student = ctx.student;
   const isCount = student.word_input_mode === 'count';
+  const wordFocus = opts.focus === 'word'; // 단어시험 빠른 진입이면 단어시험을 기본 '응시'로
 
   openModal((close) => {
     const field = (label, el, hint) => h('div', { class: 'field' }, h('label', {}, label), el, hint ? h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, hint) : null);
@@ -54,7 +55,7 @@ export function openLessonForm(ctx, lesson) {
     f.lesson_date = h('input', { type: 'date', value: lesson?.lesson_date || today() });
     f.attendance = selEl(['present|출석', 'late|지각', 'absent|결석'], lesson?.attendance || 'present');
     f.late_minutes = h('input', { type: 'number', min: '0', value: lesson?.late_minutes || 0 });
-    f.word_status = selEl(['none|시험 없음', 'taken|응시', 'noshow|미응시', 'etc|기타'], lesson?.word_status || 'none');
+    f.word_status = selEl(['none|시험 없음', 'taken|응시', 'noshow|미응시', 'etc|기타'], lesson?.word_status || (wordFocus ? 'taken' : 'none'));
     f.word_etc_reason = h('input', { value: lesson?.word_etc_reason || '', placeholder: '기타 사유 (필수)' });
     f.word_range = h('input', { value: lesson?.word_range || '', placeholder: '예: Day 20~21, 중간고사 범위 1차' });
     f.word_seen = h('input', { type: 'number', min: '0', value: lesson?.word_seen ?? '' });
@@ -129,7 +130,7 @@ export function openLessonForm(ctx, lesson) {
     setTimeout(refreshVisibility, 0);
 
     return modalShell({
-      title: lesson ? '수업 기록 수정' : '수업 기록 추가', close,
+      title: lesson ? '수업 기록 수정' : (wordFocus ? '✏️ 단어시험 입력' : '📖 수업 기록 추가'), close,
       body: h('div', {},
         h('div', { class: 'hint', style: { marginBottom: '0.6rem' } }, `단어 입력 방식: ${isCount ? '개수제 (틀린 개수로 자동 환산)' : '점수제'}`),
         h('div', { class: 'form-grid' }, field('수업일 *', f.lesson_date), field('출결', f.attendance)),

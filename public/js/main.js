@@ -97,14 +97,44 @@ export const App = {
     this.showEntry();
   },
 
+  // 상단 "수업 기록" / "단어시험" 빠른 진입 — 선택한 학생의 입력 폼을 바로 연다.
+  async quickEntry(mode) {
+    if (!state.teacher) return toast('먼저 강사로 접속하세요.', 'error');
+    const sid = state.selectedStudentId;
+    if (!sid) return toast('먼저 왼쪽에서 학생을 선택하세요.', 'error');
+    let detail;
+    try { detail = await this.loadStudentDetail(sid); }
+    catch (e) { return toast('학생 정보를 불러오지 못했습니다: ' + e.message, 'error'); }
+
+    const pane = document.querySelector('.detail-pane') || document.querySelector('.main-grid > div:last-child');
+    const self = this;
+    const ctx = {
+      student: detail.student,
+      detail,
+      reload: async () => {
+        self.invalidateStudent(sid);
+        await self.refreshStudents();
+        document.dispatchEvent(new CustomEvent('cp:students-updated'));
+        const fresh = await self.loadStudentDetail(sid, { force: true });
+        const { renderDetail } = await import('./views/detail.js');
+        if (pane) renderDetail(pane, fresh, self);
+      },
+    };
+    const { openLessonForm } = await import('./views/sections/lessons.js');
+    openLessonForm(ctx, null, { focus: mode }); // focus: 'word'면 단어시험 중심
+  },
+
   // 헤더 버튼 노출 제어 (entry/student 모드에선 관리 버튼 숨김)
   setHeaderMode(mode) {
     const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
     const isTeacher = mode === 'teacher';
+    show('btnQuickLesson', isTeacher);
+    show('btnQuickWord', isTeacher);
     show('btnWordWidget', isTeacher);
     show('btnRemote', isTeacher);
     show('btnRanking', isTeacher);
     show('btnBackup', isTeacher);
+    const sep = document.querySelector('.header-sep'); if (sep) sep.style.display = isTeacher ? '' : 'none';
     // 강사 변경/나가기 버튼
     const changeBtn = document.getElementById('btnChangeTeacher');
     if (changeBtn) {
@@ -134,6 +164,10 @@ export const App = {
         }
       }
     });
+
+    // 빠른 진입: 선택한 학생의 수업 기록 / 단어시험 입력
+    document.getElementById('btnQuickLesson').onclick = () => this.quickEntry('lesson');
+    document.getElementById('btnQuickWord').onclick = () => this.quickEntry('word');
 
     document.getElementById('btnWordWidget').onclick = () => openWordWidget();
     document.getElementById('btnRemote').onclick = () => {
