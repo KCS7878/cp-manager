@@ -651,14 +651,14 @@ table.data tr:hover td { background: #fffaf3; }
 .wc-plot {
   position: relative;
   display: flex; align-items: flex-end; justify-content: space-around; gap: 0.6rem;
-  /* height 는 JS 에서 지정 (막대 영역). 값/날짜 라벨 공간을 아래에 추가로 확보 */
-  padding: 0 0.3rem 2.6rem;
+  /* height 는 JS 에서 지정. 막대 + 값 + 날짜 라벨이 아래부터 쌓인다. */
+  padding: 0 0.3rem;
   border-bottom: 2px solid var(--border);
+  overflow: hidden; /* 혹시 막대가 커도 영역 밖으로 뚫고 나오지 않게 */
 }
-/* 통과 기준선 (막대 영역 하단 기준 bottom px 은 JS 가 지정, 라벨 영역만큼 보정) */
+/* 통과 기준선: 막대 아래 라벨 영역(LABEL_PX)만큼 띄운 위치를 JS 가 bottom 으로 지정 */
 .wc-passline {
   position: absolute; left: 0; right: 0;
-  margin-bottom: 2.6rem; /* 라벨 영역 보정 */
   border-top: 1px dashed rgba(32,48,71,0.4);
   pointer-events: none;
 }
@@ -667,23 +667,25 @@ table.data tr:hover td { background: #fffaf3; }
   font-size: 0.65rem; color: #8a94a2;
 }
 .wc-passline.ex-goalline::after { content: '목표'; }
+/* 한 열: 막대 → 값 → 날짜 순으로 아래부터 쌓임 */
 .wc-col {
-  flex: 1 1 0; min-width: 0; position: relative;
+  flex: 1 1 0; min-width: 0;
   display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+  height: 100%;
 }
 .wc-bar {
   width: 60%; max-width: 40px; min-height: 6px;
   border-radius: 6px 6px 0 0;
   transition: height 0.3s ease;
+  flex: none;
 }
-/* 값/날짜 라벨은 막대 아래 고정 영역에 배치 */
 .wc-val {
-  position: absolute; bottom: -1.4rem; left: 0; right: 0; text-align: center;
-  font-size: 0.72rem; font-weight: 800; color: var(--navy); white-space: nowrap;
+  margin-top: 0.25rem; font-size: 0.72rem; font-weight: 800; color: var(--navy);
+  white-space: nowrap; flex: none;
 }
 .wc-date {
-  position: absolute; bottom: -2.5rem; left: 0; right: 0; text-align: center;
-  font-size: 0.68rem; color: #6a7684; white-space: nowrap;
+  margin-top: 0.1rem; font-size: 0.68rem; color: #6a7684;
+  white-space: nowrap; flex: none;
 }
 
 /* ---------- 목록: 최근 N행 노출 + 내부 스크롤 (헤더 고정) ---------- */

@@ -23,13 +23,15 @@ export function renderLessons(ctx) {
 
   // ── 학습 기록 목록: 최근 5개는 한눈에, 그 이상은 내부 스크롤 ──
   const rows = lessons.map((l) => {
-    // 단어시험 상태 칸: 응시 + 기한초과면 '기한초과'를 빨간색으로 덧붙임
+    // 단어시험 칸: 응시 + 기한초과면 빨간 '기한초과'만 표시, 그 외는 상태 pill
     const overdue = l.word_status === 'taken' && !l.deadline_met;
-    const wordCell = h('span', { class: 'pill ' + l.word_status }, WORD_STATUS_LABEL[l.word_status]);
+    const wordCell = overdue
+      ? h('span', { class: 'overdue-tag' }, '기한초과')
+      : h('span', { class: 'pill ' + l.word_status }, WORD_STATUS_LABEL[l.word_status]);
     return h('tr', {},
       h('td', {}, l.lesson_date),
       h('td', {}, h('span', { class: 'pill ' + l.attendance }, ATT_LABEL[l.attendance] + (l.attendance === 'late' && l.late_minutes ? ` ${l.late_minutes}분` : ''))),
-      h('td', {}, wordCell, overdue ? h('span', { class: 'overdue-tag' }, ' 기한초과') : null),
+      h('td', {}, wordCell),
       h('td', { class: 'wrap-anywhere' }, l.word_range || '-'),
       h('td', {}, l.word_status === 'taken' ? `${l.word_score}점` : '-'),
       h('td', { class: 'wrap-anywhere' }, l.progress_today || '-'),
@@ -57,8 +59,9 @@ export function renderLessons(ctx) {
 
 // 단어시험(응시/미응시)만 추려 최근 5회를 막대그래프로.
 // 색: 통과=초록, 미달(기한내 미통과)=주황, 미응시·기한초과=빨강
-// 높이: 점수(0~100)에 비례. 막대 영역 높이(WC_PLOT_PX) 기준으로 px 지정.
-const WC_PLOT_PX = 150;
+// 높이: 점수(0~100)에 비례. 100점이어도 플롯 영역을 넘지 않도록 막대 최대치를 플롯보다 작게 둔다.
+const WC_PLOT_PX = 170;   // 플롯(막대+라벨) 전체 높이
+const WC_BAR_MAX = 120;   // 100점 막대의 최대 높이. 라벨/여백을 빼고도 영역 안에 들어오게.
 function renderWordChart(lessons, passScore) {
   const tests = lessons.filter((l) => l.word_status === 'taken' || l.word_status === 'noshow');
   if (!tests.length) return null;
@@ -75,8 +78,8 @@ function renderWordChart(lessons, passScore) {
       else if (score >= passScore) { cls = 'bar-green'; label = `${score}점·통과`; }
       else { cls = 'bar-orange'; label = `${score}점·미달`; }
     }
-    // 미응시는 바닥에 얇은 막대만. 응시는 점수 비례 높이(최소 10px).
-    const barPx = isNoshow ? 6 : Math.max(10, Math.round((score / 100) * WC_PLOT_PX));
+    // 미응시는 바닥에 얇은 막대만. 응시는 점수 비례 높이(최소 10px, 최대 WC_BAR_MAX).
+    const barPx = isNoshow ? 6 : Math.max(10, Math.round((score / 100) * WC_BAR_MAX));
     return h('div', { class: 'wc-col', title: `${l.lesson_date} · ${label}` },
       h('div', { class: `wc-bar ${cls}`, style: { height: barPx + 'px' } }),
       h('div', { class: 'wc-val' }, isNoshow ? '미응시' : String(score)),
@@ -84,8 +87,8 @@ function renderWordChart(lessons, passScore) {
     );
   });
 
-  // 통과선 위치: 막대 영역 하단 기준 px
-  const passPx = Math.round((passScore / 100) * WC_PLOT_PX);
+  // 통과선 위치: 막대 높이 기준과 동일하게 WC_BAR_MAX 스케일 사용
+  const passPx = Math.round((passScore / 100) * WC_BAR_MAX);
 
   return h('div', { class: 'word-chart' },
     h('div', { class: 'wc-head' },
@@ -97,11 +100,13 @@ function renderWordChart(lessons, passScore) {
       )
     ),
     h('div', { class: 'wc-plot', style: { height: WC_PLOT_PX + 'px' } },
-      h('div', { class: 'wc-passline', style: { bottom: passPx + 'px' }, title: `통과 기준 ${passScore}점` }),
+      h('div', { class: 'wc-passline', style: { bottom: (passPx + LABEL_PX) + 'px' }, title: `통과 기준 ${passScore}점` }),
       ...bars
     )
   );
 }
+// 막대 아래 값/날짜 라벨이 차지하는 높이(px). 통과선/목표선 bottom 계산에 보정값으로 사용.
+const LABEL_PX = 42;
 
 export function openLessonForm(ctx, lesson, opts = {}) {
   const student = ctx.student;
