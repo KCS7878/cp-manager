@@ -66,7 +66,9 @@ export function renderExams(ctx) {
 // 내신/모의고사 점수 막대그래프. trend 는 과거→현재 순 [{date,name,score,grade}].
 // 점수(0~100)에 비례한 높이. 목표가 점수형이면 목표선 + 달성(초록)/미달(주황),
 // 목표 미정이면 중립색(남색).
-const EX_PLOT_PX = 150;
+const EX_PLOT_PX = 170;   // 플롯(막대+라벨) 전체 높이
+const EX_BAR_MAX = 120;   // 100점 막대 최대 높이 (영역을 넘지 않게)
+const EX_LABEL_PX = 42;   // 막대 아래 값/날짜 라벨 영역 높이 (목표선 보정값)
 function renderScoreChart(title, trend, goal) {
   if (!trend || !trend.length) return null;
   const scored = trend.filter((e) => e.score != null).slice(-10); // 최근 10회
@@ -80,7 +82,7 @@ function renderScoreChart(title, trend, goal) {
     let cls;
     if (hasGoal) cls = score >= goalVal ? 'bar-green' : 'bar-orange';
     else cls = 'bar-navy';
-    const barPx = Math.max(10, Math.round((score / 100) * EX_PLOT_PX));
+    const barPx = Math.max(10, Math.round((score / 100) * EX_BAR_MAX));
     const label = hasGoal ? `${score}점 (목표 ${goalVal}점 ${score >= goalVal ? '달성' : '미달'})` : `${score}점`;
     return h('div', { class: 'wc-col', title: `${e.date} · ${e.name} · ${label}` },
       h('div', { class: `wc-bar ${cls}`, style: { height: barPx + 'px' } }),
@@ -96,7 +98,7 @@ function renderScoreChart(title, trend, goal) {
     : h('span', { class: 'wc-legend' }, '목표 미설정');
 
   const passline = hasGoal
-    ? h('div', { class: 'wc-passline ex-goalline', style: { bottom: Math.round((goalVal / 100) * EX_PLOT_PX) + 'px' }, title: `목표 ${goalVal}점` })
+    ? h('div', { class: 'wc-passline ex-goalline', style: { bottom: (Math.round((goalVal / 100) * EX_BAR_MAX) + EX_LABEL_PX) + 'px' }, title: `목표 ${goalVal}점` })
     : null;
 
   return h('div', { class: 'word-chart' },
