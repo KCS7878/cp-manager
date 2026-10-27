@@ -224,13 +224,13 @@ function openWordExamForm(ctx, lesson, { isCount }) {
     f.deadline_met = selEl(['1|기한 내 준수', '0|기한 초과'], String(lesson?.deadline_met ?? 1));
     f.weakness = h('textarea', {}, lesson?.weakness || '');
 
-    // 채점 방식 줄 (미응시면 통째로 숨김)
-    const modeRow = field('채점 방식', f.input_mode);
-    // 모드별 입력칸: 점수제=본단어수+점수 / 개수제=본단어수+맞은개수
+    // 모드별 입력칸: 본 단어 수 — (점수 | 맞은 개수) — 채점 방식 토글 을 한 줄에 배치
     const seenWrap = field('본 단어 수', f.word_seen);
     const scoreWrap = field('점수 (0~100)', f.word_score);
     const correctWrap = field('맞은 단어 개수', f.word_correct);
-    const scoreRow = h('div', { class: 'form-grid' }, seenWrap, scoreWrap, correctWrap);
+    const modeWrap = field('채점 방식', f.input_mode);
+    // 한 줄: [본 단어 수] [점수/맞은개수] [채점 방식 토글]
+    const scoreRow = h('div', { class: 'form-grid word-score-row' }, seenWrap, scoreWrap, correctWrap, modeWrap);
     const deadlineWrap = field('마감 기한', f.deadline_met);
     const weaknessWrap = field('틀린 단어', f.weakness);
     const modeHint = h('div', { class: 'hint', style: { marginTop: '0.3rem' } }, '');
@@ -246,7 +246,7 @@ function openWordExamForm(ctx, lesson, { isCount }) {
     // 미응시면 채점/점수/마감/틀린단어 입력을 모두 숨긴다 (미응시 패널티만 적용)
     function refreshAll() {
       const taken = f.taken.value === 'yes';
-      for (const el of [modeRow, scoreRow, deadlineWrap, weaknessWrap, modeHint]) {
+      for (const el of [scoreRow, deadlineWrap, weaknessWrap, modeHint]) {
         el.style.display = taken ? '' : 'none';
       }
       if (taken) refreshMode();
@@ -310,10 +310,9 @@ function openWordExamForm(ctx, lesson, { isCount }) {
       title: lesson ? '단어시험 기록 수정' : '✏️ 단어시험 입력', close,
       body: h('div', {},
         h('div', { class: 'form-grid' }, field('단어시험 응시일 *', f.lesson_date), field('응시 여부', f.taken)),
-        modeRow,
-        modeHint,
         field('단어시험 범위 (자유 입력)', f.word_range),
         scoreRow,
+        modeHint,
         deadlineWrap,
         weaknessWrap,
       ),

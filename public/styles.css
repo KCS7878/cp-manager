@@ -790,3 +790,16 @@ table.data tr:hover td { background: #fffaf3; }
 }
 .toggle-switch.is-right .ts-knob { left: 27px; }
 .toggle-switch .ts-track:focus-visible { outline: 3px solid rgba(238,115,90,0.4); outline-offset: 2px; }
+
+/* ---------- 단어시험: 본단어수 · 점수/맞은개수 · 채점방식 토글 한 줄 배치 ---------- */
+.word-score-row {
+  grid-template-columns: 1fr 1fr auto; /* 입력 2칸 + 토글 1칸 */
+  align-items: end; /* 입력칸과 토글을 하단 기준 정렬 */
+}
+.word-score-row .field { min-width: 0; }
+/* 토글이 들어있는 field: 입력칸 높이와 눈높이를 맞추기 위해 토글을 살짝 내림 */
+.word-score-row .toggle-switch { margin-bottom: 0.35rem; }
+@media (max-width: 560px) {
+  /* 좁은 화면에선 세로로 쌓이게 (form-grid 가 1fr 로 바뀌므로 함께 해제) */
+  .word-score-row { grid-template-columns: 1fr; align-items: stretch; }
+}
