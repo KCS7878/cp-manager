@@ -1,6 +1,6 @@
 // 시작 화면: 선생님/학생 역할 선택 + 접속 코드 입력.
 import { h, clear, toast } from '../ui.js';
-import { api } from '../api.js';
+import { api, setAdminCode } from '../api.js';
 
 const LS_ROLE = 'cp.lastRole';
 const LS_CODE = 'cp.lastCode';
@@ -9,9 +9,8 @@ const LS_CODE = 'cp.lastCode';
  * onTeacher(teacher): 선생님 코드 확인 후 (관리자 화면으로)
  * onStudent(studentId): 학생 코드 확인 후 (읽기 전용 화면으로)
  * onAdmin(): 총관리자 코드 확인 후 (전체 강사 관리 화면으로)
- * onNewTeacher(): 선생님 탭에서 "새 강사 만들기"
  */
-export function renderEntry(root, { onTeacher, onStudent, onAdmin, onNewTeacher }) {
+export function renderEntry(root, { onTeacher, onStudent, onAdmin }) {
   clear(root);
 
   let role = null; // 'teacher' | 'student'
@@ -51,11 +50,7 @@ export function renderEntry(root, { onTeacher, onStudent, onAdmin, onNewTeacher 
   const errBox = h('div', { class: 'entry-err', style: { display: 'none' } });
   const backBtn = h('button', { class: 'btn ghost', style: { width: '100%', marginTop: '0.4rem' }, onClick: () => pick(null) }, '← 역할 다시 선택');
 
-  // 선생님 탭 전용: "처음이신가요? 새 강사 만들기"
-  const newTeacherWrap = h('div', { class: 'entry-newteacher', style: { display: 'none' } },
-    h('div', { class: 'entry-or' }, '또는'),
-    h('button', { class: 'btn secondary', style: { width: '100%' }, onClick: () => onNewTeacher && onNewTeacher() }, '＋ 처음이신가요? 새 강사 만들기')
-  );
+  // 강사 생성은 총관리자 전용 기능으로 이동됨 (이 화면에는 '새 강사 만들기' 노출 안 함)
 
   codeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
   codeInput.addEventListener('input', () => { codeInput.value = codeInput.value.toUpperCase(); errBox.style.display = 'none'; });
@@ -64,7 +59,6 @@ export function renderEntry(root, { onTeacher, onStudent, onAdmin, onNewTeacher 
   codeWrap.appendChild(h('div', { class: 'field' }, codeInput));
   codeWrap.appendChild(errBox);
   codeWrap.appendChild(submitBtn);
-  codeWrap.appendChild(newTeacherWrap);
   codeWrap.appendChild(backBtn);
 
   function pick(r) {
@@ -79,8 +73,6 @@ export function renderEntry(root, { onTeacher, onStudent, onAdmin, onNewTeacher 
     codeInput.placeholder = r === 'teacher' ? '예: T-ABC123' : '예: S-ABC123';
     codeInput.value = '';
     errBox.style.display = 'none';
-    // 선생님 탭에서만 "새 강사 만들기" 노출
-    newTeacherWrap.style.display = r === 'teacher' ? '' : 'none';
     setTimeout(() => codeInput.focus(), 30);
   }
 
@@ -94,9 +86,12 @@ export function renderEntry(root, { onTeacher, onStudent, onAdmin, onNewTeacher 
       // 총관리자: 어느 탭에서 입력해도 진입 허용 (숨겨진 코드)
       if (resolved.role === 'admin') {
         try { localStorage.setItem(LS_ROLE, 'admin'); } catch {}
+        setAdminCode(code); // 이후 admin 전용 API 호출 시 헤더로 전송
         onAdmin && onAdmin();
         return;
       }
+      // 총관리자가 아닌 접속이면 혹시 남아있을 수 있는 admin 코드 제거
+      setAdminCode(null);
       // 역할 불일치 안내 (선생님/학생)
       if (role && resolved.role !== role) {
         showErr(resolved.role === 'teacher'
