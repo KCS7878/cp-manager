@@ -114,8 +114,6 @@ async function main() {
     ['2026-07-31', 'present', 0, '100점', 'Day 13-16', 1],
   ];
   for (const r of songLessons) await createLesson(song.id, lessonBody(...r));
-  // 메모(일부 수업에 진도/약점/숙제) — 대표 3건
-  await createLesson; // noop
   // 시험 (내신 2건)
   await createExam(song.id, { exam_type: 'school', exam_name: '1학기 기말', exam_date: '2026-08-07', score: 65 });
   await createExam(song.id, { exam_type: 'school', exam_name: '1학기 중간', exam_date: '2026-08-07', score: 78 });
