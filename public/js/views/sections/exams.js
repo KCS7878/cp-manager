@@ -16,6 +16,13 @@ export function renderExams(ctx) {
       miniTrend('모의고사', analysis.mockTrend, goals.mock),
       miniTrend('내신', analysis.schoolTrend, goals.school),
     ));
+
+    // 점수 막대그래프 (모의고사 / 내신)
+    const mockChart = renderScoreChart('모의고사 점수 추이', analysis.mockTrend, goals.mock);
+    const schoolChart = renderScoreChart('내신 점수 추이', analysis.schoolTrend, goals.school);
+    if (mockChart) wrap.appendChild(mockChart);
+    if (schoolChart) wrap.appendChild(schoolChart);
+
     if (analysis.weakTypes && analysis.weakTypes.length) {
       wrap.appendChild(h('div', { class: 'hint', style: { marginBottom: '0.6rem' } },
         '반복 취약 유형: ' + analysis.weakTypes.map((t) => `${t.type}(${t.rate}%)`).join(', ')));
@@ -54,6 +61,48 @@ export function renderExams(ctx) {
       h('div', { class: 'l' }, goalTxt),
       h('div', { class: 'l muted' }, `${trend.length}회 기록`));
   }
+}
+
+// 내신/모의고사 점수 막대그래프. trend 는 과거→현재 순 [{date,name,score,grade}].
+// 점수(0~100)에 비례한 높이. 목표가 점수형이면 목표선 + 달성(초록)/미달(주황),
+// 목표 미정이면 중립색(남색).
+const EX_PLOT_PX = 150;
+function renderScoreChart(title, trend, goal) {
+  if (!trend || !trend.length) return null;
+  const scored = trend.filter((e) => e.score != null).slice(-10); // 최근 10회
+  if (!scored.length) return null;
+
+  const hasGoal = goal && goal.type === 'score' && goal.value;
+  const goalVal = hasGoal ? Number(goal.value) : null;
+
+  const bars = scored.map((e) => {
+    const score = Number(e.score) || 0;
+    let cls;
+    if (hasGoal) cls = score >= goalVal ? 'bar-green' : 'bar-orange';
+    else cls = 'bar-navy';
+    const barPx = Math.max(10, Math.round((score / 100) * EX_PLOT_PX));
+    const label = hasGoal ? `${score}점 (목표 ${goalVal}점 ${score >= goalVal ? '달성' : '미달'})` : `${score}점`;
+    return h('div', { class: 'wc-col', title: `${e.date} · ${e.name} · ${label}` },
+      h('div', { class: `wc-bar ${cls}`, style: { height: barPx + 'px' } }),
+      h('div', { class: 'wc-val' }, String(score)),
+      h('div', { class: 'wc-date' }, (e.date || '').slice(5)),
+    );
+  });
+
+  const legend = hasGoal
+    ? h('span', { class: 'wc-legend' },
+        h('span', { class: 'wc-dot bar-green' }), '목표 달성 ',
+        h('span', { class: 'wc-dot bar-orange' }), '목표 미달')
+    : h('span', { class: 'wc-legend' }, '목표 미설정');
+
+  const passline = hasGoal
+    ? h('div', { class: 'wc-passline ex-goalline', style: { bottom: Math.round((goalVal / 100) * EX_PLOT_PX) + 'px' }, title: `목표 ${goalVal}점` })
+    : null;
+
+  return h('div', { class: 'word-chart' },
+    h('div', { class: 'wc-head' }, h('strong', {}, title), legend),
+    h('div', { class: 'wc-plot', style: { height: EX_PLOT_PX + 'px' } }, passline, ...bars),
+  );
 }
 
 export function openExamForm(ctx, exam) {

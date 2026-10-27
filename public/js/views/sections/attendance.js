@@ -22,7 +22,8 @@ export function renderAttendance(ctx) {
         h('td', { class: 'muted' }, l.attendance_only ? '독립 출결' : '수업 연결'),
       )
     );
-    wrap.appendChild(h('div', { class: 'table-scroll' },
+    const attScrollClass = lessons.length > 5 ? 'table-scroll rows-scroll-5' : 'table-scroll';
+    wrap.appendChild(h('div', { class: attScrollClass },
       h('table', { class: 'data' },
         h('thead', {}, h('tr', {}, h('th', {}, '날짜'), h('th', {}, '출결'), h('th', {}, '지각'), h('th', {}, '구분'))),
         h('tbody', {}, ...rows))));
