@@ -562,3 +562,22 @@ table.data tr:hover td { background: #fffaf3; }
 /* 코드 공유 UI */
 .code-box { display: inline-flex; align-items: center; gap: 0.4rem; background: #faf4ea; border: 1px dashed var(--border); border-radius: 9px; padding: 0.3rem 0.6rem; font-weight: 800; letter-spacing: 1px; color: var(--navy); }
 .code-copy { cursor: pointer; border: none; background: var(--coral); color: #fff; border-radius: 7px; padding: 0.2rem 0.5rem; font-size: 0.78rem; font-weight: 700; }
+
+/* ===== 초소형 화면(좁은 폰) 보강 ===== */
+@media (max-width: 480px) {
+  .cp-hero-num { font-size: 3rem; letter-spacing: -1px; }
+  .cp-hero-unit { font-size: 1.2rem; }
+  .cp-hero { padding: 1rem 0.9rem; }
+  .sv-hi { font-size: 1.2rem; }
+  /* 학생 화면 랭킹 2칸은 유지하되 패딩 축소 */
+  .sv-rank-card { padding: 0.6rem 0.4rem; }
+  .sv-rank-big { font-size: 1.5rem; }
+  .cp-submetric-v { font-size: 1.4rem; }
+  .entry-role-icon { font-size: 1.7rem; }
+  .entry-code-input { font-size: 1.1rem; }
+  .app-header { gap: 0.4rem; padding: 0.6rem 0.75rem; }
+}
+@media (max-width: 360px) {
+  /* 극단적으로 좁은 경우만 1열 */
+  .entry-role-row { grid-template-columns: 1fr; }
+}
