@@ -17,7 +17,7 @@ binding = "ASSETS"
 [[d1_databases]]
 binding = "DB"
 database_name = "cp-manager-db"
-database_id = "PUT-YOUR-D1-DATABASE-ID-HERE"
+database_id = "aeb0886a-d40d-4daa-a567-c0e3d5fd560a"
 
 # 관리자 보호키(선택): 대시보드 Variables에서 CP_ADMIN_KEY 설정 가능
 # [vars]

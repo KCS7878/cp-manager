@@ -16,3 +16,4 @@ coverage
 scripts/screenshot.mjs
 scripts/dump-text.mjs
 scripts/check-frontend-modules.mjs
+cp-manager.zip
