@@ -14,6 +14,7 @@ import * as rankSvc from '../services/ranking-service.js';
 import * as backupSvc from '../services/backup-service.js';
 import * as coachSvc from '../services/coach-service.js';
 import * as uploadSvc from '../services/upload-service.js';
+import * as accessSvc from '../services/access-service.js';
 import { getLedger } from '../services/ledger-service.js';
 import { getDb } from '../db/connection.js';
 import { EXAM_TYPES } from '../lib/exam-types.js';
@@ -24,6 +25,16 @@ const num = (v) => Number(v);
 // ---- 헬스/메타 ----
 router.get('/api/health', () => ({ ok: true, time: new Date().toISOString() }));
 router.get('/api/exam-types', () => ({ types: EXAM_TYPES }));
+
+// ---- 접속 코드 (선생님/학생 로그인 대용) ----
+router.post('/api/access/resolve', async (ctx) => accessSvc.resolveAccessCode(ctx.body.code));
+router.get('/api/teachers/:id/code', async (ctx) => ({ code: await accessSvc.getTeacherCode(num(ctx.params.id)) }));
+router.get('/api/students/:id/code', async (ctx) => ({ code: await accessSvc.getStudentCode(num(ctx.params.id)) }));
+router.post('/api/teachers/:id/code/regenerate', async (ctx) => accessSvc.regenerateCode('teacher', num(ctx.params.id)));
+router.post('/api/students/:id/code/regenerate', async (ctx) => accessSvc.regenerateCode('student', num(ctx.params.id)));
+
+// ---- 학생 읽기 전용 화면 ----
+router.get('/api/students/:id/public', async (ctx) => accessSvc.getStudentPublicView(num(ctx.params.id)));
 
 // ---- 강사 ----
 router.get('/api/teachers', async () => ({ teachers: await teacherSvc.listTeachers() }));

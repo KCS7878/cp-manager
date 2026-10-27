@@ -518,3 +518,47 @@ table.data tr:hover td { background: #fffaf3; }
   .form-grid { grid-template-columns: 1fr; }
   .summary-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ===== 시작 화면 (역할 선택 + 코드) ===== */
+.entry-wrap { display: flex; justify-content: center; padding-top: 4vh; }
+.entry-card { max-width: 480px; width: 100%; box-shadow: var(--shadow-lg); }
+.entry-role-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; margin: 1rem 0; }
+.entry-role-btn {
+  border: 2px solid var(--border); border-radius: 14px; background: #fff; cursor: pointer;
+  padding: 1.1rem 0.8rem; text-align: center; transition: all 0.14s;
+}
+.entry-role-btn:hover { border-color: var(--coral); background: #fffaf3; transform: translateY(-2px); }
+.entry-role-btn.active { border-color: var(--coral); background: #fdeae4; box-shadow: var(--shadow); }
+.entry-role-icon { font-size: 2rem; }
+.entry-role-title { font-weight: 800; font-size: 1.05rem; margin-top: 0.3rem; }
+.entry-role-desc { font-size: 0.8rem; color: #8a94a1; margin-top: 0.15rem; }
+.entry-code-wrap { margin-top: 0.3rem; }
+.entry-code-label { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: #51606f; }
+.entry-code-input {
+  width: 100%; padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: 11px;
+  background: #fff; font-size: 1.2rem; font-weight: 700; letter-spacing: 1px; text-align: center;
+}
+.entry-code-input:focus { outline: 3px solid rgba(238,115,90,0.3); border-color: var(--coral); }
+.entry-err { background: rgba(192,57,43,0.08); color: var(--danger); border: 1px solid rgba(192,57,43,0.3); border-radius: 9px; padding: 0.5rem 0.7rem; font-size: 0.88rem; margin-bottom: 0.6rem; }
+
+/* ===== 학생 읽기 전용 화면 ===== */
+.student-view { display: flex; flex-direction: column; gap: 1rem; }
+.sv-greeting { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; padding: 0.3rem 0.2rem; }
+.sv-hi { font-size: 1.4rem; font-weight: 800; }
+.sv-sub { font-size: 0.9rem; margin-top: 0.1rem; }
+.sv-section-title { margin: 0 0 0.7rem; font-size: 1.05rem; }
+.sv-rank-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; margin-bottom: 0.8rem; }
+.sv-rank-card { border: 1px solid var(--border); border-radius: 13px; padding: 0.8rem; text-align: center; background: #faf4ea; }
+.sv-rank-label { font-size: 0.8rem; color: #8a94a1; }
+.sv-rank-big { font-size: 1.8rem; font-weight: 900; color: var(--coral); }
+.sv-rank-meta { font-size: 0.76rem; }
+.sv-rank-note { font-size: 0.82rem; margin: 0.3rem 0; }
+.sv-ranklist .rank-row.me { background: rgba(238,115,90,0.12); border-radius: 8px; font-weight: 800; }
+.sv-goals { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.sv-goal-chip { display: flex; flex-direction: column; gap: 0.1rem; background: #faf4ea; border: 1px solid var(--border); border-radius: 10px; padding: 0.4rem 0.7rem; font-size: 0.9rem; }
+.sv-goal-chip strong { color: var(--coral-dark); }
+.sv-footer { text-align: center; font-size: 0.8rem; padding: 0.5rem; }
+
+/* 코드 공유 UI */
+.code-box { display: inline-flex; align-items: center; gap: 0.4rem; background: #faf4ea; border: 1px dashed var(--border); border-radius: 9px; padding: 0.3rem 0.6rem; font-weight: 800; letter-spacing: 1px; color: var(--navy); }
+.code-copy { cursor: pointer; border: none; background: var(--coral); color: #fff; border-radius: 7px; padding: 0.2rem 0.5rem; font-size: 0.78rem; font-weight: 700; }

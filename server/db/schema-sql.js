@@ -16,8 +16,10 @@ CREATE TABLE IF NOT EXISTS teachers (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   name        TEXT NOT NULL,
   color       TEXT DEFAULT '#ee735a',   -- 카드 강조색
+  access_code TEXT,                     -- 선생님 접속 코드 (로그인 대용)
   created_at  TEXT NOT NULL
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_teachers_code ON teachers(access_code) WHERE access_code IS NOT NULL;
 
 -- 강사별 학교 목록
 CREATE TABLE IF NOT EXISTS schools (
@@ -44,11 +46,13 @@ CREATE TABLE IF NOT EXISTS students (
   exam_goal_type  TEXT DEFAULT 'undecided',  -- 'grade' | 'score' | 'undecided'
   exam_goal_value TEXT,
   word_input_mode TEXT DEFAULT 'count',      -- 'count'(개수제) | 'score'(점수제)
+  access_code     TEXT,                      -- 학생 접속 코드 (읽기 전용 화면용)
   archived        INTEGER NOT NULL DEFAULT 0,
   created_at      TEXT NOT NULL,
   updated_at      TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_students_teacher ON students(teacher_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_students_code ON students(access_code) WHERE access_code IS NOT NULL;
 
 -- 강사별 CP 규칙 (강사당 1행). 학생별 예외는 student_cp_rules.
 CREATE TABLE IF NOT EXISTS cp_rules (

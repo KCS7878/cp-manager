@@ -1,6 +1,7 @@
 // 강사 / 학교 / 의의·규칙 안내문 서비스.
 import { getDb, transaction } from '../db/connection.js';
 import { nowSeoulStamp } from '../lib/time.js';
+import { uniqueCode } from '../db/migrate.js';
 import { getTeacherRules } from './rules-service.js';
 import {
   requireString,
@@ -32,9 +33,10 @@ export async function createTeacher(body) {
     const name = requireString(body.name, '강사명', { max: 60 });
     const color = optString(body.color, '색상', { max: 20 }) || '#ee735a';
     const stamp = nowSeoulStamp();
+    const code = await uniqueCode(db, 'T', 'teachers');
     const info = await db.run(
-      'INSERT INTO teachers (name, color, created_at) VALUES (?, ?, ?)',
-      [name, color, stamp]
+      'INSERT INTO teachers (name, color, access_code, created_at) VALUES (?, ?, ?, ?)',
+      [name, color, code, stamp]
     );
     const id = Number(info.lastInsertRowid);
     await getTeacherRules(db, id); // 기본 규칙 생성

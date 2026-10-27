@@ -72,6 +72,7 @@ export function renderSummary(ctx) {
       h('div', { class: 'btn-row' },
         h('button', { class: 'btn sm secondary', onClick: () => openStudentForm(s, ctxTeacher(), () => ctx.reload()) }, '수정'),
         h('button', { class: 'btn sm secondary', onClick: () => exportStudentJson(s), title: '이 학생의 모든 기록을 JSON 파일로 저장' }, '⬇ 내보내기'),
+        h('button', { class: 'btn sm secondary', onClick: () => showStudentCode(s) }, '🔑 접속 코드'),
         h('button', { class: 'btn sm danger', onClick: () => deleteStudent(ctx) }, '삭제'),
       )
     ),
@@ -155,6 +156,43 @@ function openManualCp(ctx) {
       footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '저장')],
     });
   });
+}
+
+async function showStudentCode(s) {
+  let code = '불러오는 중...';
+  try {
+    const res = await api.get(`/api/students/${s.id}/code`);
+    code = res.code;
+  } catch (e) { toast('코드 조회 실패: ' + e.message, 'error'); return; }
+  openModal((close) => {
+    const codeEl = h('span', {}, code);
+    return modalShell({
+      title: `${s.name} 학생 접속 코드`, close,
+      body: h('div', {},
+        h('p', { class: 'muted' }, '이 코드를 학생에게 알려주세요. 학생은 시작 화면에서 “학생”을 고르고 이 코드를 입력하면 본인 CP·랭킹을 볼 수 있습니다. (편집은 불가)'),
+        h('div', { style: { textAlign: 'center', margin: '1rem 0' } },
+          h('span', { class: 'code-box', style: { fontSize: '1.4rem' } }, codeEl)),
+        h('div', { class: 'btn-row', style: { justifyContent: 'center' } },
+          h('button', { class: 'btn', onClick: () => copyText(code) }, '📋 복사'),
+          h('button', { class: 'btn secondary', onClick: async () => {
+            const ok = await confirmDialog('코드를 새로 발급하면 기존 코드는 더 이상 쓸 수 없습니다. 계속할까요?', { title: '코드 재발급', confirmText: '재발급', danger: false });
+            if (!ok) return;
+            try { const r = await api.post(`/api/students/${s.id}/code/regenerate`, {}); codeEl.textContent = r.code; code = r.code; toast('새 코드가 발급되었습니다.', 'success'); }
+            catch (e) { toast(e.message, 'error'); }
+          } }, '🔄 재발급'),
+        ),
+      ),
+      footer: [h('button', { class: 'btn secondary', onClick: close }, '닫기')],
+    });
+  });
+}
+
+function copyText(txt) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(() => toast('복사되었습니다.', 'success')).catch(() => toast('복사 실패. 직접 선택해 복사하세요.', 'error'));
+  } else {
+    toast('이 브라우저에서는 자동 복사가 안 됩니다. 코드를 길게 눌러 복사하세요.', 'info');
+  }
 }
 
 async function exportStudentJson(s) {

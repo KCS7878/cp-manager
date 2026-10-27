@@ -9,13 +9,65 @@ import { openWordWidget } from './views/word-widget.js';
 import { openRemote } from './views/remote.js';
 import { openRanking } from './views/ranking.js';
 import { openBackup } from './views/backup.js';
+import { renderEntry } from './views/entry.js';
+import { renderStudentView } from './views/student-view.js';
 
 const appEl = document.getElementById('app');
+const headerEl = document.querySelector('.app-header');
 
 export const App = {
   async boot() {
     this.bindHeader();
+    this.showEntry();
+  },
+
+  // 시작 화면 (역할 선택 + 코드 입력)
+  showEntry() {
+    // 학생/선생님 모드 공통: 헤더의 관리용 버튼 숨김 상태로 시작
+    this.setHeaderMode('entry');
+    renderEntry(appEl, {
+      onTeacher: () => this.enterTeacherMode(),
+      onStudent: (studentId) => this.enterStudentMode(studentId),
+    });
+  },
+
+  // 선생님 모드: 기존 관리자 플로우 (강사 목록 로드)
+  async enterTeacherMode() {
+    this.setHeaderMode('teacher');
     await this.loadTeachers();
+  },
+
+  // 학생 모드: 읽기 전용 화면
+  async enterStudentMode(studentId) {
+    this.setHeaderMode('student');
+    renderStudentView(appEl, studentId, { onExit: () => this.exitToEntry() });
+  },
+
+  exitToEntry() {
+    try { localStorage.removeItem('cp.lastCode'); } catch {}
+    state.teacher = null;
+    window.__cpTeacher = null;
+    this.showEntry();
+  },
+
+  // 헤더 버튼 노출 제어 (entry/student 모드에선 관리 버튼 숨김)
+  setHeaderMode(mode) {
+    const show = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+    const isTeacher = mode === 'teacher';
+    show('btnWordWidget', isTeacher);
+    show('btnRemote', isTeacher);
+    show('btnRanking', isTeacher);
+    show('btnBackup', isTeacher);
+    // 강사 변경/나가기 버튼
+    const changeBtn = document.getElementById('btnChangeTeacher');
+    if (changeBtn) {
+      if (isTeacher) { changeBtn.style.display = ''; changeBtn.textContent = '↩ 나가기'; }
+      else changeBtn.style.display = 'none';
+    }
+    if (mode !== 'teacher') {
+      const badge = document.getElementById('teacherBadge');
+      if (badge) badge.textContent = '';
+    }
   },
 
   bindHeader() {
@@ -46,7 +98,7 @@ export const App = {
       openRanking(state.teacher);
     };
     document.getElementById('btnBackup').onclick = () => openBackup(state.teacher);
-    document.getElementById('btnChangeTeacher').onclick = () => this.showTeacherSelect();
+    document.getElementById('btnChangeTeacher').onclick = () => this.exitToEntry();
   },
 
   // 1단계: 강사 목록만 빠르게 로드
@@ -93,7 +145,6 @@ export const App = {
   showTeacherSelect() {
     state.teacher = null;
     document.getElementById('teacherBadge').textContent = '';
-    document.getElementById('btnChangeTeacher').style.display = 'none';
     clear(appEl);
     appEl.appendChild(renderTeacherSelect(state.teachers, (t) => this.selectTeacher(t), {
       onChanged: () => this.loadTeachers(),

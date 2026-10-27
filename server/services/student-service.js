@@ -1,6 +1,7 @@
 // 학생 서비스.
 import { getDb, transaction } from '../db/connection.js';
 import { nowSeoulStamp } from '../lib/time.js';
+import { uniqueCode } from '../db/migrate.js';
 import { getStudentBalance } from './ledger-service.js';
 import {
   requireString,
@@ -114,16 +115,17 @@ export async function createStudent(body) {
     const t = await db.get('SELECT id FROM teachers WHERE id = ?', [d.teacher_id]);
     if (!t) throw new NotFoundError('담당 강사를 찾을 수 없습니다.');
     const stamp = nowSeoulStamp();
+    const code = await uniqueCode(db, 'S', 'students');
     const info = await db.run(
       `INSERT INTO students
           (teacher_id, name, school, school_level, grade, class_name, age, subject,
            mock_goal_type, mock_goal_value, exam_goal_type, exam_goal_value, word_input_mode,
-           created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           access_code, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [
         d.teacher_id, d.name, d.school, d.school_level, d.grade, d.class_name, d.age, d.subject,
         d.mock_goal_type, d.mock_goal_value, d.exam_goal_type, d.exam_goal_value, d.word_input_mode,
-        stamp, stamp,
+        code, stamp, stamp,
       ]
     );
     return await getStudent(Number(info.lastInsertRowid));

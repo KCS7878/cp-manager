@@ -1,0 +1,190 @@
+// 학생 읽기 전용 화면. 편집 기능 없음.
+import { h, clear, toast, loadingEl, errorEl } from '../ui.js';
+import { api } from '../api.js';
+
+export async function renderStudentView(root, studentId, { onExit } = {}) {
+  clear(root);
+  root.appendChild(loadingEl('내 정보를 불러오는 중...'));
+
+  let data;
+  try {
+    data = await api.get(`/api/students/${studentId}/public`, { timeout: 12000 });
+  } catch (e) {
+    clear(root);
+    root.appendChild(errorEl(new Error('정보를 불러오지 못했습니다: ' + e.message), () => renderStudentView(root, studentId, { onExit })));
+    return;
+  }
+
+  clear(root);
+  const s = data.student;
+  const cp = data.cp;
+
+  const wrap = h('div', { class: 'student-view' });
+
+  // 상단 인사
+  wrap.appendChild(h('div', { class: 'sv-greeting' },
+    h('div', {},
+      h('div', { class: 'sv-hi' }, `${s.name} 님, 안녕하세요! 👋`),
+      h('div', { class: 'sv-sub muted' }, [s.grade, s.school, s.class_name].filter(Boolean).join(' · ') + (s.teacher ? ` · ${s.teacher} 선생님` : '')),
+    ),
+    onExit ? h('button', { class: 'btn sm secondary', onClick: onExit }, '나가기') : null,
+  ));
+
+  // CP 히어로 (가용 CP 강조)
+  const total = cp.available + cp.pending;
+  const availPct = total > 0 ? Math.round((cp.available / total) * 100) : 0;
+  wrap.appendChild(h('div', { class: 'card' },
+    h('div', { class: 'section-body' },
+      h('div', { class: 'cp-hero', style: { border: 'none', boxShadow: 'none', padding: 0 } },
+        h('div', { class: 'cp-hero-main' },
+          h('div', { class: 'cp-hero-big' },
+            h('span', { class: 'cp-hero-num' }, String(cp.available)),
+            h('span', { class: 'cp-hero-unit' }, 'CP'),
+          ),
+          h('div', { class: 'cp-hero-caption' }, '지금 바로 쓸 수 있는 CP'),
+          h('span', { class: 'cp-exchange-badge' + (cp.available > 0 ? '' : ' off') },
+            cp.available > 0 ? '🎁 상품 교환 가능' : '교환 가능 CP 부족'),
+        ),
+        h('div', { class: 'cp-hero-sub' },
+          subMetric('pending', cp.pending, '지급 예정 CP', '다음 달 1일 전환'),
+          subMetric('next', cp.available + cp.pending, '다음 달 사용 가능', '대기분 포함'),
+        ),
+        h('div', { class: 'cp-bar' }, h('div', { class: 'cp-bar-fill', style: { width: availPct + '%' } })),
+        h('div', { class: 'cp-bar-labels' },
+          h('span', { class: 'muted' }, `누적 CP ${cp.cumulative}`),
+          h('span', { class: 'muted' }, '지급 예정 CP는 다음 달 1일부터 사용 가능'),
+        ),
+      )
+    )
+  ));
+
+  // 내 랭킹
+  const rk = data.ranking;
+  wrap.appendChild(h('div', { class: 'card' },
+    h('div', { class: 'section-body' },
+      h('h3', { class: 'sv-section-title' }, '🏆 내 랭킹'),
+      h('div', { class: 'sv-rank-row' },
+        rankCard('누적 CP', rk.cumulative.myRank, rk.cumulative.total, rk.cumulative.myCp),
+        rankCard('이번 달', rk.monthly.myRank, rk.monthly.total, rk.monthly.myCp, rk.monthly.monthKey),
+      ),
+      h('div', { class: 'sv-rank-note muted' }, '전체 랭킹 TOP 10'),
+      renderRankList(rk.cumulative.top, s.name),
+    )
+  ));
+
+  // 단어시험 추세
+  if (data.wordTrend && data.wordTrend.length) {
+    wrap.appendChild(h('div', { class: 'card' },
+      h('div', { class: 'section-body' },
+        h('h3', { class: 'sv-section-title' }, '📚 내 단어시험 기록'),
+        h('div', { class: 'table-scroll' },
+          h('table', { class: 'data' },
+            h('thead', {}, h('tr', {}, h('th', {}, '날짜'), h('th', {}, '범위'), h('th', {}, '점수'), h('th', {}, '기한'))),
+            h('tbody', {}, ...data.wordTrend.map((w) => h('tr', {},
+              h('td', {}, w.date),
+              h('td', { class: 'wrap-anywhere' }, w.range || '-'),
+              h('td', {}, `${w.score}점`),
+              h('td', {}, w.deadlineMet ? h('span', { class: 'pos' }, '내') : h('span', { class: 'neg' }, '초과')),
+            ))),
+          )
+        )
+      )
+    ));
+  }
+
+  // 시험 분석 (유형별 정답률)
+  const ea = data.examAnalysis;
+  if (ea && ((ea.typeAccuracy && ea.typeAccuracy.length) || (ea.mockTrend && ea.mockTrend.length) || (ea.schoolTrend && ea.schoolTrend.length))) {
+    const body = h('div', { class: 'section-body' }, h('h3', { class: 'sv-section-title' }, '📈 내 시험 분석'));
+    // 목표
+    body.appendChild(h('div', { class: 'sv-goals' },
+      goalChip('모의 목표', s.mock_goal_type, s.mock_goal_value),
+      goalChip('내신 목표', s.exam_goal_type, s.exam_goal_value),
+    ));
+    if (ea.typeAccuracy && ea.typeAccuracy.length) {
+      body.appendChild(h('div', { class: 'table-scroll', style: { marginTop: '0.6rem' } },
+        h('table', { class: 'data' },
+          h('thead', {}, h('tr', {}, h('th', {}, '유형'), h('th', {}, '정답/전체'), h('th', {}, '정답률'))),
+          h('tbody', {}, ...ea.typeAccuracy.map((t) => h('tr', {},
+            h('td', {}, t.type), h('td', {}, `${t.correct}/${t.total}`),
+            h('td', { class: t.rate !== null && t.rate < 60 ? 'neg' : 'pos' }, t.rate !== null ? `${t.rate}%` : '-'),
+          ))),
+        )
+      ));
+    }
+    wrap.appendChild(h('div', { class: 'card' }, body));
+  }
+
+  // 보유 상품 (인벤토리)
+  wrap.appendChild(h('div', { class: 'card' },
+    h('div', { class: 'section-body' },
+      h('h3', { class: 'sv-section-title' }, '🎒 내 보유 상품'),
+      data.inventory && data.inventory.length
+        ? h('div', { class: 'table-scroll' },
+            h('table', { class: 'data' },
+              h('thead', {}, h('tr', {}, h('th', {}, '상품'), h('th', {}, '구매일'), h('th', {}, '상태'))),
+              h('tbody', {}, ...data.inventory.map((p) => h('tr', {},
+                h('td', { class: 'wrap-anywhere' }, p.product_name),
+                h('td', {}, (p.purchased_at || '').slice(0, 10)),
+                h('td', {}, h('span', { class: 'pill ' + (p.inventory_state === 'used' ? 'none' : 'present') }, p.inventory_state === 'used' ? '사용완료' : '보유중')),
+              ))),
+            )
+          )
+        : h('div', { class: 'empty' }, '아직 구매한 상품이 없어요. CP를 모아 상점에서 교환해 보세요!'),
+    )
+  ));
+
+  // 최근 CP 지급 내역 (읽기 전용)
+  if (data.ledger && data.ledger.length) {
+    wrap.appendChild(h('div', { class: 'card' },
+      h('div', { class: 'section-body' },
+        h('h3', { class: 'sv-section-title' }, '📒 내 CP 받은 내역'),
+        h('div', { class: 'table-scroll' },
+          h('table', { class: 'data' },
+            h('thead', {}, h('tr', {}, h('th', {}, '날짜'), h('th', {}, '내용'), h('th', {}, 'CP'))),
+            h('tbody', {}, ...data.ledger.slice(0, 20).map((l) => h('tr', {},
+              h('td', {}, l.occurred_date),
+              h('td', { class: 'wrap-anywhere' }, l.reason),
+              h('td', { class: l.amount >= 0 ? 'pos' : 'neg' }, (l.amount > 0 ? '+' : '') + l.amount),
+            ))),
+          )
+        ),
+      )
+    ));
+  }
+
+  wrap.appendChild(h('div', { class: 'sv-footer muted' }, '이 화면은 보기 전용입니다. 기록 수정은 선생님께 문의하세요.'));
+  root.appendChild(wrap);
+
+  function subMetric(cls, v, label, note) {
+    return h('div', { class: `cp-submetric ${cls}` },
+      h('div', { class: 'cp-submetric-v' }, String(v)),
+      h('div', { class: 'cp-submetric-l' }, label),
+      h('div', { class: 'cp-submetric-note' }, note));
+  }
+  function rankCard(label, rank, total, cp, monthKey) {
+    return h('div', { class: 'sv-rank-card' },
+      h('div', { class: 'sv-rank-label' }, label + (monthKey ? ` (${monthKey})` : '')),
+      h('div', { class: 'sv-rank-big' }, rank ? `${rank}위` : '-'),
+      h('div', { class: 'sv-rank-meta muted' }, (total ? `${total}명 중` : '') + ` · ${cp} CP`));
+  }
+  function goalChip(label, type, val) {
+    const txt = (type === 'undecided' || val == null || val === '') ? '미정'
+      : (type === 'grade' ? `${String(val).replace(/[^0-9.]/g, '')}등급` : `${String(val).replace(/[^0-9.]/g, '')}점`);
+    return h('div', { class: 'sv-goal-chip' }, h('span', { class: 'muted' }, label), h('strong', {}, txt));
+  }
+}
+
+function renderRankList(top, myName) {
+  const box = h('div', { class: 'sv-ranklist' });
+  for (const r of top) {
+    const isMe = r.name === myName;
+    const rankCls = r.rank === 1 ? 'top1' : r.rank === 2 ? 'top2' : r.rank === 3 ? 'top3' : '';
+    box.appendChild(h('div', { class: 'rank-row' + (isMe ? ' me' : '') },
+      h('span', { class: 'rank-num ' + rankCls }, r.rank),
+      h('span', { class: 'rank-name wrap-anywhere' }, r.name + (isMe ? ' (나)' : '') + (r.grade ? ` · ${r.grade}` : '')),
+      h('span', { class: 'rank-cp' }, `${r.cp} CP`),
+    ));
+  }
+  return box;
+}
