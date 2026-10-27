@@ -95,25 +95,42 @@ export async function importData(payload, { confirm = false, scope = 'all', teac
   if (!payload || typeof payload !== 'object' || !payload.tables) {
     throw new ValidationError('유효하지 않은 백업 파일입니다. tables 필드가 없습니다.');
   }
-  // 복원 전 자동 백업
-  const backupFile = await autoBackupToFile(scope === 'teacher' ? teacherId : null, 'auto_before_import');
+  // 복원 전 자동 백업 (실패해도 복원은 진행 — Workers/D1에서 백업 단계가 막더라도 본 복원은 가능하게)
+  let backupFile = null;
+  try {
+    backupFile = await autoBackupToFile(scope === 'teacher' ? teacherId : null, 'auto_before_import');
+  } catch (e) {
+    backupFile = '(자동 백업 생략됨)';
+  }
 
-  await transaction(async (db) => {
-    await db.exec('PRAGMA foreign_keys = OFF;');
-    try {
-      if (scope === 'all') {
-        for (const t of [...TABLES].reverse()) await db.run(`DELETE FROM ${t}`, []);
-        for (const t of TABLES) await insertRows(db, t, payload.tables[t]);
-      } else {
-        if (!teacherId) throw new ValidationError('강사 범위 복원에는 teacher_id가 필요합니다.');
-        // 해당 강사 데이터 삭제 후 삽입
-        await db.run('DELETE FROM teachers WHERE id = ?', [teacherId]); // CASCADE
-        for (const t of TABLES) await insertRows(db, t, payload.tables[t]);
-      }
-    } finally {
-      await db.exec('PRAGMA foreign_keys = ON;');
-    }
-  });
+  const db = getDb();
+  // 삭제+삽입 문장을 하나의 목록으로 모아 batch로 원자 실행한다.
+  // (D1: batch는 하나의 트랜잭션으로 묶여 전부 성공/전부 실패 → 빈 데이터 덮어쓰기 방지)
+  // (로컬: 어댑터 batch가 BEGIN/COMMIT으로 감쌈)
+  const statements = [];
+
+  if (scope === 'all') {
+    // 삭제: 자식→부모 (역순)
+    for (const t of [...TABLES].reverse()) statements.push({ sql: `DELETE FROM ${t}`, params: [] });
+  } else {
+    if (!teacherId) throw new ValidationError('강사 범위 복원에는 teacher_id가 필요합니다.');
+    statements.push({ sql: 'DELETE FROM teachers WHERE id = ?', params: [teacherId] }); // CASCADE
+  }
+  // 삽입: 부모→자식 (정순)
+  for (const t of TABLES) {
+    const rows = payload.tables[t];
+    if (!Array.isArray(rows) || rows.length === 0) continue;
+    const cols = Object.keys(rows[0]);
+    const placeholders = cols.map(() => '?').join(',');
+    const sql = `INSERT OR REPLACE INTO ${t} (${cols.join(',')}) VALUES (${placeholders})`;
+    for (const row of rows) statements.push({ sql, params: cols.map((c) => row[c] ?? null) });
+  }
+
+  try {
+    await db.batch(statements);
+  } catch (e) {
+    throw new ValidationError(`복원 실패: ${e.message}`);
+  }
 
   return { restored: true, backupFile };
 }
