@@ -238,11 +238,11 @@ export const App = {
   async refreshStudents() {
     const { filters, teacher } = state;
     try {
+      // 코드 기반 로그인 → 항상 해당 강사(mine). 학교는 다중 선택이므로 서버 단일필터 대신 클라에서 처리.
       const { students } = await api.get('/api/students', {
         query: {
           teacher_id: teacher.id,
-          scope: filters.scope,
-          school: filters.school,
+          scope: 'mine',
           class_name: filters.className,
           level: filters.level,
           grade: filters.grade,
@@ -251,8 +251,13 @@ export const App = {
         },
         dedupKey: 'students-list',
       });
-      state.students = students;
-      return students;
+      state.allStudents = students; // 학교 옵션 산출용 (필터 전 전체)
+      // 학교 다중 선택 필터 (빈 배열/undefined면 전체)
+      const sel = filters.schools;
+      state.students = (sel && sel.length)
+        ? students.filter((s) => sel.includes(s.school))
+        : students;
+      return state.students;
     } catch (err) {
       toast('학생 목록 갱신 실패: ' + err.message, 'error');
       return state.students;

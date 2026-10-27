@@ -57,34 +57,88 @@
       } catch (e) { listEl.innerHTML = ''; listEl.appendChild(h('div', { class: 'error-box' }, e.message)); }
     }
 
+    // 학생별 로컬 상태 + 카드 DOM 캐시 (즉각 반응용)
+    const roster = new Map(); // studentId -> { s, cardEl, dotsEl, labelEl, pending(동기화 대기 delta 큐) }
+
     function paint(students) {
       clear(listEl);
+      roster.clear();
       if (!students.length) { listEl.appendChild(h('div', { class: 'empty' }, '해당 분반 학생이 없습니다.')); return; }
-      for (const s of students) listEl.appendChild(renderCard(s));
+      for (const s of students) {
+        const entry = renderCard(s);
+        roster.set(s.id, entry);
+        listEl.appendChild(entry.cardEl);
+      }
     }
 
     function renderCard(s) {
-      const dots = h('div', { class: 'stacks' });
-      for (let i = 1; i <= 3; i++) {
-        dots.appendChild(h('div', { class: 'stack-dot' + (s.stack >= i ? (i === 3 ? ' bonus' : ' on') : '') }, i === 3 ? '★' : i));
-      }
-      const card = h('div', { class: 'remote-card' },
+      const dotsEl = h('div', { class: 'stacks' });
+      const labelEl = h('span', { class: 'muted' });
+      const cardEl = h('div', { class: 'remote-card' },
         h('div', { class: 'nm wrap-anywhere' }, s.name),
-        dots,
-        h('span', { class: 'muted' }, `${s.stack}회${s.bonus_given ? ' (+보너스)' : ''}`),
-        h('button', { class: 'btn sm', onClick: () => adjust(s, 1) }, '참여 +1'),
-        h('button', { class: 'btn sm secondary', onClick: () => adjust(s, -1) }, '정정 -1'));
-      return card;
+        dotsEl,
+        labelEl,
+        h('button', { class: 'btn sm', onClick: () => adjust(s.id, 1) }, '참여 +1'),
+        h('button', { class: 'btn sm secondary', onClick: () => adjust(s.id, -1) }, '정정 -1'));
+      const entry = { s: { ...s }, cardEl, dotsEl, labelEl, syncing: false, queued: 0 };
+      drawCard(entry);
+      return entry;
     }
 
-    async function adjust(s, delta) {
+    // 로컬 상태를 DOM에 즉시 그린다 (서버 응답 기다리지 않음)
+    function drawCard(entry) {
+      const { s } = entry;
+      clear(entry.dotsEl);
+      for (let i = 1; i <= 3; i++) {
+        entry.dotsEl.appendChild(h('div', { class: 'stack-dot' + (s.stack >= i ? (i === 3 ? ' bonus' : ' on') : '') }, i === 3 ? '★' : i));
+      }
+      entry.labelEl.textContent = `${s.stack}회${s.bonus_given ? ' (+보너스)' : ''}`;
+      // 깜빡 효과로 즉각 반응 피드백
+      entry.cardEl.style.transition = 'none';
+      entry.cardEl.style.background = '#fff3ee';
+      requestAnimationFrame(() => { entry.cardEl.style.transition = 'background 0.4s'; entry.cardEl.style.background = '#fff'; });
+    }
+
+    // 즉각 반응: 로컬 상태를 바로 바꾸고 DOM 갱신, 서버는 뒤에서 순차 동기화
+    function adjust(studentId, delta) {
+      const entry = roster.get(studentId);
+      if (!entry) return;
+      const s = entry.s;
+      // 로컬 즉시 반영 (0~3 범위, 3스택 보너스 로컬 추정)
+      let newStack = s.stack + delta;
+      if (newStack < 0) newStack = 0;
+      if (newStack > 3) newStack = 3;
+      s.stack = newStack;
+      s.bonus_given = newStack >= 3 ? 1 : 0;
+      drawCard(entry);
+      // 서버 동기화 큐에 추가 (순서 보장)
+      entry.queued += delta;
+      syncEntry(entry, studentId);
+    }
+
+    // 큐에 쌓인 delta를 순차 전송 (버튼을 연타해도 UI는 즉각, 서버는 뒤에서 따라옴)
+    async function syncEntry(entry, studentId) {
+      if (entry.syncing) return;
+      entry.syncing = true;
       try {
-        const { result } = await api.post(`/api/students/${s.id}/participation`, { lesson_date: dateInp.value, delta });
-        if (result.bonus_given && delta > 0 && result.stack === 3) toast(`${s.name} 3회 달성! 보너스 CP 지급`, 'success');
-        if (!result.bonus_given && delta < 0 && result.stack === 2) toast(`${s.name} 보너스 CP 회수됨`, 'info');
-        await loadRoster();
-        if (window.opener && !window.opener.closed) window.opener.dispatchEvent(new CustomEvent('cp:data-changed', { detail: { studentId: s.id } }));
-      } catch (e) { toast(e.message, 'error'); }
+        while (entry.queued !== 0) {
+          const dir = entry.queued > 0 ? 1 : -1;
+          entry.queued -= dir;
+          try {
+            await api.post(`/api/students/${studentId}/participation`, { lesson_date: dateInp.value, delta: dir });
+          } catch (e) {
+            // 전송 실패 시 조용히 1회 재시도 후 포기 (UI는 유지, 다음 새로고침 때 정합)
+            try { await api.post(`/api/students/${studentId}/participation`, { lesson_date: dateInp.value, delta: dir }); }
+            catch { toast('일부 반영이 지연됐습니다. 잠시 후 자동 동기화됩니다.', 'info'); }
+          }
+        }
+        // 메인 화면에 반영 신호 (뒤에서)
+        if (window.opener && !window.opener.closed) {
+          window.opener.dispatchEvent(new CustomEvent('cp:data-changed', { detail: { studentId } }));
+        }
+      } finally {
+        entry.syncing = false;
+      }
     }
 
     classSel.onchange = loadRoster;

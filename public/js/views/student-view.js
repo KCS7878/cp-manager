@@ -115,6 +115,28 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
     wrap.appendChild(h('div', { class: 'card' }, body));
   }
 
+  // 상점 (구매 가능한 상품 — 읽기 전용, 교환은 선생님에게)
+  if (data.products && data.products.length) {
+    const grid = h('div', { class: 'product-grid' });
+    for (const p of data.products) {
+      const affordable = cp.available >= p.effective_cp;
+      grid.appendChild(h('div', { class: 'product-card' + (affordable ? '' : ' p-ended') },
+        p.image_url ? h('img', { src: p.image_url, alt: p.name }) : h('div', { class: 'p-noimg' }, '🎁'),
+        h('div', { class: 'p-body' },
+          h('div', { class: 'p-name wrap-anywhere' }, p.name),
+          p.description ? h('div', { class: 'muted wrap-anywhere', style: { fontSize: '0.8rem' } }, p.description) : null,
+          h('div', { class: 'p-cp' }, `${p.effective_cp} CP`),
+          h('div', { class: affordable ? 'sv-afford' : 'sv-notafford' }, affordable ? '✅ 교환 가능' : `${p.effective_cp - cp.available} CP 더 필요`),
+        )));
+    }
+    wrap.appendChild(h('div', { class: 'card' },
+      h('div', { class: 'section-body' },
+        h('h3', { class: 'sv-section-title' }, '🛒 상점 (CP로 교환 가능한 상품)'),
+        h('p', { class: 'muted', style: { marginTop: '-0.3rem', marginBottom: '0.7rem', fontSize: '0.84rem' } }, '교환을 원하면 선생님께 말씀하세요. (이 화면은 보기 전용)'),
+        grid,
+      )));
+  }
+
   // 보유 상품 (인벤토리)
   wrap.appendChild(h('div', { class: 'card' },
     h('div', { class: 'section-body' },

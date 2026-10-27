@@ -71,12 +71,6 @@ function renderSidebar(sidebar, detailPane, App) {
     paintList();
   };
 
-  // ── 담당/전체 토글 ──
-  const scopeToggle = h('div', { class: 'seg-group' },
-    segBtn('담당 학생', () => state.filters.scope === 'mine', () => { state.filters.scope = 'mine'; refreshToggles(); apply(); }),
-    segBtn('전체 학생 나열', () => state.filters.scope === 'all', () => { state.filters.scope = 'all'; refreshToggles(); apply(); }),
-  );
-
   // ── 학교급 선택 ──
   const levelGroup = h('div', { class: 'seg-group three' },
     segBtn('전체', () => !state.filters.level, () => { state.filters.level = undefined; state.filters.grade = ''; refreshToggles(); renderGradeStep(); apply(); }),
@@ -95,14 +89,26 @@ function renderSidebar(sidebar, detailPane, App) {
     gradeWrap.appendChild(step);
   }
 
-  // ── 학교 체크 목록 (단일 활성 필터) ──
+  // ── 학교 체크 목록 (다중 선택 필터) ──
+  // 등록된 학교 + 학생들이 실제로 가진 학교를 합쳐서 나열 (학교 관리 메뉴 없이도 전부 보이게)
+  function schoolOptions() {
+    const set = new Set();
+    for (const s of (state.schools || [])) if (s.name) set.add(s.name);
+    for (const s of (state.allStudents || state.students || [])) if (s.school) set.add(s.school);
+    return [...set].sort((a, b) => a.localeCompare(b, 'ko'));
+  }
   function renderSchools() {
     clear(schoolBox);
-    if (!state.schools.length) { schoolBox.appendChild(h('div', { class: 'filter-empty' }, '등록된 학교 없음')); return; }
-    for (const s of state.schools) {
-      const active = state.filters.school === s.name;
-      schoolBox.appendChild(checkRow(s.name, active, () => {
-        state.filters.school = active ? undefined : s.name;
+    const opts = schoolOptions();
+    if (!opts.length) { schoolBox.appendChild(h('div', { class: 'filter-empty' }, '등록된 학교 없음')); return; }
+    const selected = state.filters.schools || [];
+    for (const name of opts) {
+      const active = selected.includes(name);
+      schoolBox.appendChild(checkRow(name, active, () => {
+        let cur = state.filters.schools ? [...state.filters.schools] : [];
+        if (cur.includes(name)) cur = cur.filter((x) => x !== name);
+        else cur.push(name);
+        state.filters.schools = cur.length ? cur : undefined;
         renderSchools(); apply();
       }));
     }
@@ -122,7 +128,6 @@ function renderSidebar(sidebar, detailPane, App) {
   }
 
   function refreshToggles() {
-    scopeToggle.querySelectorAll('.seg-btn').forEach((b) => b.__sync && b.__sync());
     levelGroup.querySelectorAll('.seg-btn').forEach((b) => b.__sync && b.__sync());
   }
 
@@ -190,29 +195,24 @@ function renderSidebar(sidebar, detailPane, App) {
       h('span', { class: 'side-section-label' }, '학생 분류'),
       h('button', { class: 'side-add-btn', title: '학생 추가', onClick: () => openStudentForm(null, state.teacher, () => apply()) }, '+')
     ),
-    scopeToggle,
-    h('div', { class: 'filter-note' }, '선택하지 않으면 모든 학생이 표시됩니다.'),
+    h('div', { class: 'filter-note' }, '학교·분반·학년을 선택해 학생을 좁혀 볼 수 있습니다. 선택하지 않으면 전체가 표시됩니다.'),
 
     // 학교급
     filterBox('학교급 선택', '먼저 학교급을 고르세요.', h('div', {}, levelGroup, gradeWrap), '중·고등학생 전체 표시'),
 
-    // 학교
+    // 학교 (다중 선택 필터)
     filterBox('학교 선택',
       h('div', { class: 'filter-box-actions' },
-        miniBtn('추가', () => openSchoolForm(apply)),
-        miniBtn('삭제', () => openSchoolDelete(renderSchools)),
-        miniBtn('전체 선택', () => { state.filters.school = undefined; renderSchools(); apply(); }),
-        miniBtn('선택 해제', () => { state.filters.school = undefined; renderSchools(); apply(); })
+        miniBtn('전체 보기', () => { state.filters.schools = undefined; renderSchools(); apply(); })
       ),
-      schoolBox, '선택 없음 · 전체 표시'),
+      schoolBox, '선택한 학교만 표시 · 미선택 시 전체'),
 
-    // 분반
+    // 분반 (다중 선택 필터)
     filterBox('분반 선택',
       h('div', { class: 'filter-box-actions' },
-        miniBtn('전체 선택', () => { state.filters.className = undefined; renderClasses(); apply(); }),
-        miniBtn('선택 해제', () => { state.filters.className = undefined; renderClasses(); apply(); })
+        miniBtn('전체 보기', () => { state.filters.className = undefined; renderClasses(); apply(); })
       ),
-      classBox, '선택 없음 · 전체 표시'),
+      classBox, '선택한 분반만 표시 · 미선택 시 전체'),
 
     // 검색 + 정렬
     nameInput,
@@ -276,46 +276,6 @@ function selectStudentKeepActive(detailPane, sidebar, App) {
     state.selectedStudentId = null;
     selectStudent(id, detailPane, sidebar, App);
   }
-}
-
-// ---- 학교 추가/삭제 모달 ----
-function openSchoolForm(onDone) {
-  import('../ui.js').then(({ openModal, modalShell }) => {
-    openModal((close) => {
-      const name = h('input', { placeholder: '학교명' });
-      const level = segSelect(['etc|기타', 'middle|중학교', 'high|고등학교'], 'etc');
-      const save = async () => {
-        try { await api.post(`/api/teachers/${state.teacher.id}/schools`, { name: name.value, level: level.value });
-          const { schools } = await api.get(`/api/teachers/${state.teacher.id}/schools`); state.schools = schools;
-          toast('학교가 추가되었습니다.', 'success'); close(); onDone && onDone(); }
-        catch (e) { toast(e.message, 'error'); }
-      };
-      return modalShell({ title: '학교 추가', close,
-        body: h('div', {}, h('div', { class: 'field' }, h('label', {}, '학교명'), name), h('div', { class: 'field' }, h('label', {}, '학교급'), level)),
-        footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '저장')] });
-    });
-  });
-}
-
-function openSchoolDelete(onDone) {
-  import('../ui.js').then(({ openModal, modalShell, confirmDialog }) => {
-    openModal((close) => {
-      const box = h('div', {});
-      if (!state.schools.length) box.appendChild(h('div', { class: 'empty' }, '등록된 학교가 없습니다.'));
-      for (const s of state.schools) {
-        box.appendChild(h('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid #f3ecdf' } },
-          h('span', {}, s.name),
-          h('button', { class: 'btn sm danger', onClick: async () => {
-            const ok = await confirmDialog(`'${s.name}' 학교를 목록에서 삭제할까요?`, { title: '학교 삭제', confirmText: '삭제' });
-            if (!ok) return;
-            try { await api.del(`/api/schools/${s.id}`); const { schools } = await api.get(`/api/teachers/${state.teacher.id}/schools`); state.schools = schools; toast('삭제되었습니다.', 'success'); close(); onDone && onDone(); }
-            catch (e) { toast(e.message, 'error'); }
-          } }, '삭제')
-        ));
-      }
-      return modalShell({ title: '학교 삭제', close, body: box, footer: [h('button', { class: 'btn secondary', onClick: close }, '닫기')] });
-    });
-  });
 }
 
 // ---- 작은 UI 헬퍼 ----
