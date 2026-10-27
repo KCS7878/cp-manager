@@ -34,7 +34,10 @@ export function renderEntry(root, { onTeacher, onStudent, onAdmin, onNewTeacher 
     h('div', { class: 'entry-role-desc' }, '학생 관리·CP 지급')
   );
   const studentBtn = h('button', { class: 'entry-role-btn', onClick: () => pick('student') },
-    h('div', { class: 'entry-role-icon' }, '🧑‍🎓'),
+    h('div', { class: 'entry-role-icon entry-role-icon-imgs' },
+      h('img', { src: 'assets/ST_male.png', alt: '남학생', class: 'entry-role-img' }),
+      h('img', { src: 'assets/ST_female.png', alt: '여학생', class: 'entry-role-img' }),
+    ),
     h('div', { class: 'entry-role-title' }, '학생'),
     h('div', { class: 'entry-role-desc' }, '내 CP·랭킹 확인')
   );

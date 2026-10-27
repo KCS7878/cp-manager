@@ -539,8 +539,18 @@ table.data tr:hover td { background: #fffaf3; }
 }
 .entry-role-btn:hover { border-color: var(--coral); background: #fffaf3; transform: translateY(-2px); }
 .entry-role-btn.active { border-color: var(--coral); background: #fdeae4; box-shadow: var(--shadow); }
-.entry-role-icon { font-size: 2rem; }
-.entry-role-title { font-weight: 800; font-size: 1.05rem; margin-top: 0.3rem; }
+.entry-role-icon { font-size: 2rem; min-height: 64px; display: flex; align-items: center; justify-content: center; }
+/* 학생 버튼: 남·여 학생 일러스트 두 개를 나란히. 얼굴+손 위주로 보이고 하반신은 잘리게 */
+.entry-role-icon-imgs { gap: 0.3rem; }
+.entry-role-icon-imgs .entry-role-img {
+  display: block;
+  width: 52px;
+  height: 60px;               /* 세로 틀 제한 → 하단(하반신)은 잘림 */
+  object-fit: cover;
+  object-position: top center; /* 상단(얼굴·손) 우선 노출 */
+  border-radius: 10px;
+}
+.entry-role-title { font-weight: 800; font-size: 1.05rem; margin-top: 0.5rem; }
 .entry-role-desc { font-size: 0.8rem; color: #8a94a1; margin-top: 0.15rem; }
 .entry-code-wrap { margin-top: 0.3rem; }
 .entry-code-label { font-weight: 700; font-size: 0.9rem; margin-bottom: 0.4rem; color: #51606f; }
