@@ -37,6 +37,9 @@ button, input, select, textarea {
 /* 모든 텍스트가 상자 밖으로 나가지 않도록 */
 * { min-width: 0; }
 .wrap-anywhere { overflow-wrap: anywhere; word-break: break-word; }
+/* 단, 표 셀은 min-width:0 때문에 짜부라져 글자가 세로로 쪼개지는 것을 방지 */
+table.data th, table.data td { min-width: max-content; }
+table.data td.wrap-anywhere { min-width: 7rem; }
 
 a { color: var(--coral-dark); }
 
@@ -701,3 +704,54 @@ table.data tr:hover td { background: #fffaf3; }
 }
 /* 단어시험 칸의 기한초과 표기 */
 .overdue-tag { color: var(--danger); font-weight: 800; font-size: 0.78rem; }
+
+/* ======================================================================
+   모바일 반응형 (≤640px)
+   - 기본: 모든 데이터 표는 가로 스크롤(셀이 짜부라져 글자가 세로로 쪼개지지 않게)
+   - .card-table 이 붙은 표는 "행=카드" 형태로 전환(긴 텍스트 표에 적합)
+   ====================================================================== */
+@media (max-width: 640px) {
+  /* 헤더 버튼들이 넘칠 때 줄바꿈 */
+  .topbar, .header-actions { flex-wrap: wrap; }
+
+  /* 일반 데이터 표: 가로 스크롤 + 스크롤 여지 안내 */
+  .table-scroll { -webkit-overflow-scrolling: touch; }
+  .table-scroll table.data { min-width: 560px; }
+
+  /* ---- 카드형 표: 행을 세로 카드로 ---- */
+  .card-table .table-scroll { overflow-x: visible; }
+  .card-table table.data,
+  .card-table table.data tbody,
+  .card-table table.data tr,
+  .card-table table.data td { display: block; width: 100%; }
+  .card-table table.data { min-width: 0; }
+  .card-table table.data thead { display: none; } /* 헤더 숨기고 셀마다 라벨 표시 */
+  .card-table table.data tr {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 0.6rem 0.8rem;
+    margin-bottom: 0.6rem;
+    background: #fffdf8;
+    box-shadow: var(--shadow);
+  }
+  .card-table table.data td {
+    border: none;
+    padding: 0.2rem 0;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 0.8rem;
+    min-width: 0;
+    white-space: normal;
+    overflow-wrap: anywhere; word-break: break-word;
+    text-align: right;
+  }
+  /* 각 셀 왼쪽에 라벨(data-label) 표시 */
+  .card-table table.data td::before {
+    content: attr(data-label);
+    font-weight: 700; font-size: 0.78rem; color: #8a94a1;
+    text-align: left; flex: none; white-space: nowrap;
+  }
+  /* 라벨이 비어있는 셀(예: 버튼 칸)은 라벨 영역 숨김 */
+  .card-table table.data td[data-label=""]::before { content: none; }
+  .card-table table.data td[data-label=""] { justify-content: flex-end; }
+  /* 카드 안 내부 스크롤 높이 제한 해제(카드가 세로로 길어지므로) */
+  .card-table .rows-scroll-5 { max-height: none; }
+}

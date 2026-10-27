@@ -36,20 +36,21 @@ export function renderExams(ctx) {
 
   const rows = exams.map((e) =>
     h('tr', {},
-      h('td', {}, e.exam_type === 'mock' ? '모의고사' : '내신'),
-      h('td', { class: 'wrap-anywhere' }, e.exam_name),
-      h('td', {}, e.exam_date),
-      h('td', {}, e.score != null ? `${e.score}점` : '-'),
-      h('td', {}, e.grade || '-'),
-      h('td', { class: 'wrap-anywhere' }, e.weakness || '-'),
-      h('td', {}, h('div', { class: 'btn-row' },
+      h('td', { 'data-label': '종류' }, e.exam_type === 'mock' ? '모의고사' : '내신'),
+      h('td', { 'data-label': '시험명', class: 'wrap-anywhere' }, e.exam_name),
+      h('td', { 'data-label': '시험일' }, e.exam_date),
+      h('td', { 'data-label': '점수' }, e.score != null ? `${e.score}점` : '-'),
+      h('td', { 'data-label': '등급' }, e.grade || '-'),
+      h('td', { 'data-label': '약점', class: 'wrap-anywhere' }, e.weakness || '-'),
+      h('td', { 'data-label': '' }, h('div', { class: 'btn-row' },
         h('button', { class: 'btn sm secondary', onClick: () => openExamForm(ctx, e) }, '수정'),
         h('button', { class: 'btn sm danger', onClick: () => delExam(ctx, e) }, '삭제'))))
   );
-  wrap.appendChild(h('div', { class: 'table-scroll' },
-    h('table', { class: 'data' },
-      h('thead', {}, h('tr', {}, h('th', {}, '종류'), h('th', {}, '시험명'), h('th', {}, '시험일'), h('th', {}, '점수'), h('th', {}, '등급'), h('th', {}, '약점'), h('th', {}, ''))),
-      h('tbody', {}, ...rows))));
+  wrap.appendChild(h('div', { class: 'card-table' },
+    h('div', { class: 'table-scroll' },
+      h('table', { class: 'data' },
+        h('thead', {}, h('tr', {}, h('th', {}, '종류'), h('th', {}, '시험명'), h('th', {}, '시험일'), h('th', {}, '점수'), h('th', {}, '등급'), h('th', {}, '약점'), h('th', {}, ''))),
+        h('tbody', {}, ...rows)))));
   return wrap;
 
   function miniTrend(label, trend, goal) {

@@ -12,13 +12,13 @@ export function renderLedger(ctx) {
 
   const rows = ledger.map((l) =>
     h('tr', {},
-      h('td', {}, l.occurred_date),
-      h('td', { class: l.amount >= 0 ? 'pos' : 'neg' }, fmtCp(l.amount)),
-      h('td', { class: 'wrap-anywhere' }, l.reason),
-      h('td', {}, h('span', { class: 'pill ' + (l.status === 'available' ? 'present' : 'late') }, l.status === 'available' ? '가용' : '대기')),
-      h('td', { class: 'muted' }, SOURCE_LABEL[l.source_type] || l.source_type),
-      h('td', { class: 'muted' }, l.available_date),
-      h('td', {},
+      h('td', { 'data-label': '발생일' }, l.occurred_date),
+      h('td', { 'data-label': '금액', class: l.amount >= 0 ? 'pos' : 'neg' }, fmtCp(l.amount)),
+      h('td', { 'data-label': '사유', class: 'wrap-anywhere' }, l.reason),
+      h('td', { 'data-label': '상태' }, h('span', { class: 'pill ' + (l.status === 'available' ? 'present' : 'late') }, l.status === 'available' ? '가용' : '대기')),
+      h('td', { 'data-label': '종류', class: 'muted' }, SOURCE_LABEL[l.source_type] || l.source_type),
+      h('td', { 'data-label': '사용가능일', class: 'muted' }, l.available_date),
+      h('td', { 'data-label': '' },
         l.source_type === 'manual'
           ? h('button', { class: 'btn sm danger', onClick: () => delManual(ctx, l) }, '삭제')
           : h('span', { class: 'muted', title: '원본 기록에서 수정하세요' }, '—')
@@ -26,12 +26,14 @@ export function renderLedger(ctx) {
     )
   );
 
-  return h('div', { class: 'table-scroll' },
-    h('table', { class: 'data' },
-      h('thead', {}, h('tr', {},
-        h('th', {}, '발생일'), h('th', {}, '금액'), h('th', {}, '사유'),
-        h('th', {}, '상태'), h('th', {}, '종류'), h('th', {}, '사용가능일'), h('th', {}, ''))),
-      h('tbody', {}, ...rows)
+  return h('div', { class: 'card-table' },
+    h('div', { class: 'table-scroll' },
+      h('table', { class: 'data' },
+        h('thead', {}, h('tr', {},
+          h('th', {}, '발생일'), h('th', {}, '금액'), h('th', {}, '사유'),
+          h('th', {}, '상태'), h('th', {}, '종류'), h('th', {}, '사용가능일'), h('th', {}, ''))),
+        h('tbody', {}, ...rows)
+      )
     )
   );
 }
