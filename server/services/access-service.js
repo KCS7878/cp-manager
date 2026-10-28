@@ -21,14 +21,24 @@ function fullAdminCode() {
  * (프런트에서 버튼을 숨겨도 API 직접 호출로 우회되는 것을 막는다.)
  */
 export function assertAdmin(req) {
-  const header = req && req.headers ? (req.headers['x-admin-code'] || req.headers['X-Admin-Code']) : null;
-  const code = String(header || '').trim().toUpperCase();
+  const code = String(readHeader(req, 'x-admin-code') || '').trim().toUpperCase();
   if (!code || code !== fullAdminCode()) {
     const err = new ValidationError('이 기능은 총관리자만 사용할 수 있습니다.');
     err.status = 403;
     err.code = 'FORBIDDEN';
     throw err;
   }
+}
+
+// 로컬 Node(http): req.headers 는 일반 객체(소문자 키).
+// Cloudflare Workers: request.headers 는 Headers 객체 → .get() 필요.
+// 두 환경을 모두 지원한다.
+function readHeader(req, name) {
+  if (!req || !req.headers) return null;
+  const hs = req.headers;
+  if (typeof hs.get === 'function') return hs.get(name);
+  const lower = name.toLowerCase();
+  return hs[lower] ?? hs[name] ?? null;
 }
 
 /**
