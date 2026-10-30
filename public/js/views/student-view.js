@@ -258,6 +258,47 @@ function openScoreForm(studentId, reload) {
     const score = h('input', { type: 'number', min: '0', max: '100', placeholder: '0~100' });
     const grade = h('input', { placeholder: '예: 2 (선택)' });
 
+    // 45문항 O/X — 기본 전부 O(맞음). 틀린 번호만 탭해서 X로 토글(다시 탭하면 O).
+    const QN = 45;
+    const marks = Array.from({ length: QN }, () => 'o');
+    const omrGrid = h('div', { class: 'omr-simple' });
+    function paintOmr() {
+      omrGrid.innerHTML = '';
+      for (let i = 0; i < QN; i++) {
+        const cur = marks[i];
+        const cell = h('button', {
+          type: 'button',
+          class: 'omr-cell ' + (cur === 'x' ? 'is-x' : 'is-o'),
+          title: `${i + 1}번`,
+          onClick: () => { marks[i] = marks[i] === 'o' ? 'x' : 'o'; paintOmr(); updateWrong(); },
+        }, h('span', { class: 'omr-no' }, String(i + 1)), h('span', { class: 'omr-mk' }, cur === 'x' ? 'X' : 'O'));
+        omrGrid.appendChild(cell);
+      }
+    }
+    const wrongInfo = h('div', { class: 'omr-wrong-info muted' }, '');
+    function updateWrong() {
+      const wrong = marks.filter((m) => m === 'x').length;
+      wrongInfo.textContent = wrong === 0 ? '모두 맞음 (45/45)' : `틀린 문항 ${wrong}개 · 맞은 문항 ${QN - wrong}개`;
+    }
+    const resetAllO = h('button', { type: 'button', class: 'btn sm secondary', onClick: () => { marks.fill('o'); paintOmr(); updateWrong(); } }, '전부 맞음(O)으로');
+
+    const omrSection = h('div', { class: 'omr-section' },
+      h('div', { class: 'omr-head' },
+        h('strong', {}, '문항별 정답 체크 (45문항)'),
+        resetAllO,
+      ),
+      h('div', { class: 'hint', style: { margin: '0.2rem 0 0.5rem' } }, '기본은 전부 O(맞음)입니다. 틀린 번호만 눌러 X로 바꾸세요.'),
+      omrGrid,
+      wrongInfo,
+    );
+    paintOmr(); updateWrong();
+
+    function refreshType() {
+      omrSection.style.display = examType.value === 'mock' ? '' : 'none';
+    }
+    examType.onchange = refreshType;
+    setTimeout(refreshType, 0);
+
     const save = async () => {
       if (!examName.value.trim()) { toast('시험명을 입력하세요.', 'error'); return; }
       if (score.value === '' && grade.value.trim() === '') { toast('점수나 등급 중 하나는 입력하세요.', 'error'); return; }
@@ -268,6 +309,12 @@ function openScoreForm(studentId, reload) {
         score: score.value !== '' ? Number(score.value) : null,
         grade: grade.value,
       };
+      // 모의고사면 45문항 O/X 포함 (서버 items 형식: {1:'o'|'x', ...})
+      if (examType.value === 'mock') {
+        const items = {};
+        marks.forEach((m, i) => { items[i + 1] = m; });
+        bodyData.items = items;
+      }
       try {
         await api.post(`/api/students/${studentId}/exams/self`, bodyData);
         toast('점수가 제출되었습니다. 선생님 확인 후 반영됩니다.', 'success');
@@ -283,6 +330,7 @@ function openScoreForm(studentId, reload) {
         h('div', { class: 'form-grid' }, field('시험 종류', examType), field('시험일', examDate)),
         field('시험명', examName),
         h('div', { class: 'form-grid' }, field('점수 (0~100)', score), field('등급 (선택)', grade)),
+        omrSection,
       ),
       footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '제출')],
     });

@@ -84,6 +84,8 @@ export async function submitSelfExam(studentId, body) {
     exam_date: body.exam_date,
     score: body.score,
     grade: body.grade,
+    // 모의고사 문항별 O/X (1~45). 내신 등은 생략 가능. validateItems 가 o/x 만 추려 저장.
+    items: body.items !== undefined ? body.items : undefined,
   };
   return createExam(studentId, safeBody, { status: 'pending', submittedBy: 'student' });
 }
