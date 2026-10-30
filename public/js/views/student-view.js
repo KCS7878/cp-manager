@@ -1,5 +1,5 @@
 // 학생 읽기 전용 화면. 편집 기능 없음.
-import { h, clear, toast, loadingEl, errorEl } from '../ui.js';
+import { h, clear, toast, loadingEl, errorEl, openModal, modalShell } from '../ui.js';
 import { api } from '../api.js';
 
 export async function renderStudentView(root, studentId, { onExit } = {}) {
@@ -115,6 +115,9 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
     wrap.appendChild(h('div', { class: 'card' }, body));
   }
 
+  // ── 점수 입력 (학생이 시험/모의고사 점수를 제출 → 선생님 승인) ──
+  wrap.appendChild(renderScoreSubmit(studentId, data, () => renderStudentView(root, studentId, { onExit })));
+
   // 상점 (구매 가능한 상품 — 읽기 전용, 교환은 선생님에게)
   if (data.products && data.products.length) {
     const grid = h('div', { class: 'product-grid' });
@@ -209,4 +212,86 @@ function renderRankList(top, myName) {
     ));
   }
   return box;
+}
+
+// ── 점수 입력 섹션: 학생이 시험 점수를 제출하고, 내가 제출한 점수의 상태를 본다 ──
+function renderScoreSubmit(studentId, data, reload) {
+  const EXAM_LABEL = { school: '내신', mock: '모의고사' };
+  const STATUS_LABEL = { pending: '검토 대기', confirmed: '승인됨' };
+  const submitted = data.mySubmittedExams || [];
+
+  const body = h('div', { class: 'section-body' });
+  body.appendChild(h('h3', { class: 'sv-section-title' }, '✏️ 점수 입력'));
+  body.appendChild(h('p', { class: 'muted', style: { marginTop: '-0.3rem', marginBottom: '0.7rem', fontSize: '0.84rem' } },
+    '학교 시험이나 모의고사 점수를 입력해 제출하면, 선생님이 확인 후 성적에 반영합니다.'));
+
+  body.appendChild(h('div', { class: 'btn-row', style: { marginBottom: '0.7rem' } },
+    h('button', { class: 'btn sm', onClick: () => openScoreForm(studentId, reload) }, '＋ 점수 제출하기')));
+
+  if (submitted.length) {
+    body.appendChild(h('div', { class: 'card-table' }, h('div', { class: 'table-scroll' },
+      h('table', { class: 'data' },
+        h('thead', {}, h('tr', {}, h('th', {}, '종류'), h('th', {}, '시험명'), h('th', {}, '시험일'), h('th', {}, '점수'), h('th', {}, '상태'))),
+        h('tbody', {}, ...submitted.map((e) => h('tr', {},
+          h('td', { 'data-label': '종류' }, EXAM_LABEL[e.exam_type] || e.exam_type),
+          h('td', { 'data-label': '시험명', class: 'wrap-anywhere' }, e.exam_name),
+          h('td', { 'data-label': '시험일' }, e.exam_date),
+          h('td', { 'data-label': '점수' }, (e.score != null ? `${e.score}점` : '-') + (e.grade ? ` (${e.grade}등급)` : '')),
+          h('td', { 'data-label': '상태' },
+            h('span', { class: 'pill ' + (e.status === 'confirmed' ? 'present' : 'late') }, STATUS_LABEL[e.status] || e.status)),
+        ))),
+      )
+    )));
+  } else {
+    body.appendChild(h('div', { class: 'empty' }, '아직 제출한 점수가 없습니다.'));
+  }
+
+  return h('div', { class: 'card' }, body);
+}
+
+function openScoreForm(studentId, reload) {
+  openModal((close) => {
+    const field = (label, el) => h('div', { class: 'field' }, h('label', {}, label), el);
+    const examType = selEl(['mock|모의고사', 'school|내신'], 'mock');
+    const examName = h('input', { placeholder: '예: 9월 모의고사, 2학기 중간고사' });
+    const examDate = h('input', { type: 'date', value: todaySeoul() });
+    const score = h('input', { type: 'number', min: '0', max: '100', placeholder: '0~100' });
+    const grade = h('input', { placeholder: '예: 2 (선택)' });
+
+    const save = async () => {
+      if (!examName.value.trim()) { toast('시험명을 입력하세요.', 'error'); return; }
+      if (score.value === '' && grade.value.trim() === '') { toast('점수나 등급 중 하나는 입력하세요.', 'error'); return; }
+      const bodyData = {
+        exam_type: examType.value,
+        exam_name: examName.value,
+        exam_date: examDate.value,
+        score: score.value !== '' ? Number(score.value) : null,
+        grade: grade.value,
+      };
+      try {
+        await api.post(`/api/students/${studentId}/exams/self`, bodyData);
+        toast('점수가 제출되었습니다. 선생님 확인 후 반영됩니다.', 'success');
+        close();
+        reload();
+      } catch (e) { toast(e.message, 'error'); }
+    };
+
+    return modalShell({
+      title: '✏️ 점수 제출', close,
+      body: h('div', {},
+        h('div', { class: 'hint', style: { marginBottom: '0.6rem' } }, '제출한 점수는 선생님이 확인·승인한 뒤 내 성적에 반영됩니다.'),
+        h('div', { class: 'form-grid' }, field('시험 종류', examType), field('시험일', examDate)),
+        field('시험명', examName),
+        h('div', { class: 'form-grid' }, field('점수 (0~100)', score), field('등급 (선택)', grade)),
+      ),
+      footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '제출')],
+    });
+  });
+}
+
+function todaySeoul() { return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10); }
+function selEl(options, current) {
+  const sel = h('select');
+  for (const opt of options) { const [v, l] = opt.split('|'); const o = h('option', { value: v }, l); if (v === current) o.selected = true; sel.appendChild(o); }
+  return sel;
 }

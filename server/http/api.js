@@ -106,6 +106,10 @@ router.post('/api/students/:id/exams', async (ctx) => ({ exam: await examSvc.cre
 router.put('/api/exams/:id', async (ctx) => ({ exam: await examSvc.updateExam(num(ctx.params.id), ctx.body) }));
 router.delete('/api/exams/:id', async (ctx) => examSvc.deleteExam(num(ctx.params.id)));
 router.get('/api/students/:id/exam-analysis', async (ctx) => examSvc.analyzeExams(num(ctx.params.id)));
+// 학생 자가 점수 제출(승인 대기) / 선생님 승인 / 제출 대기 목록
+router.post('/api/students/:id/exams/self', async (ctx) => ({ exam: await examSvc.submitSelfExam(num(ctx.params.id), ctx.body) }));
+router.get('/api/students/:id/exams/pending', async (ctx) => ({ exams: await examSvc.listPendingExams(num(ctx.params.id)) }));
+router.post('/api/exams/:id/confirm', async (ctx) => ({ exam: await examSvc.confirmExam(num(ctx.params.id)) }));
 
 // ---- AI 코치 ----
 router.get('/api/students/:id/coach', async (ctx) => coachSvc.coachAnalyze(num(ctx.params.id)));

@@ -55,19 +55,57 @@ function parseExamBody(body, existing = {}) {
   };
 }
 
-export async function createExam(studentId, body) {
+export async function createExam(studentId, body, meta = {}) {
   return transaction(async (db) => {
     const s = await db.get('SELECT id FROM students WHERE id = ?', [studentId]);
     if (!s) throw new NotFoundError('학생을 찾을 수 없습니다.');
     const d = parseExamBody(body);
+    const status = meta.status === 'pending' ? 'pending' : 'confirmed';
+    const submittedBy = meta.submittedBy === 'student' ? 'student' : 'teacher';
     const stamp = nowSeoulStamp();
     const info = await db.run(
-      `INSERT INTO exams (student_id, exam_type, exam_name, exam_date, score, grade, strengths, weakness, feedback, items_json, created_at, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [studentId, d.exam_type, d.exam_name, d.exam_date, d.score, d.grade, d.strengths, d.weakness, d.feedback, d.items_json, stamp, stamp]
+      `INSERT INTO exams (student_id, exam_type, exam_name, exam_date, score, grade, strengths, weakness, feedback, items_json, status, submitted_by, created_at, updated_at)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [studentId, d.exam_type, d.exam_name, d.exam_date, d.score, d.grade, d.strengths, d.weakness, d.feedback, d.items_json, status, submittedBy, stamp, stamp]
     );
     return db.get('SELECT * FROM exams WHERE id = ?', [Number(info.lastInsertRowid)]);
   });
+}
+
+/**
+ * 학생이 직접 제출하는 시험 점수. 승인 전까지 status='pending' 으로 저장되어
+ * 분석/목표 비교에는 반영되지 않는다. 선생님이 승인하면 confirmed 가 된다.
+ * 학생 입력은 점수/등급 위주로 제한(문항 OMR·피드백 등은 받지 않음).
+ */
+export async function submitSelfExam(studentId, body) {
+  const safeBody = {
+    exam_type: body.exam_type,
+    exam_name: body.exam_name,
+    exam_date: body.exam_date,
+    score: body.score,
+    grade: body.grade,
+  };
+  return createExam(studentId, safeBody, { status: 'pending', submittedBy: 'student' });
+}
+
+/** 학생이 제출한 시험(pending)을 확정(confirmed)으로 승인 */
+export async function confirmExam(id) {
+  return transaction(async (db) => {
+    const existing = await db.get('SELECT * FROM exams WHERE id = ?', [id]);
+    if (!existing) throw new NotFoundError('시험 기록을 찾을 수 없습니다.');
+    await db.run('UPDATE exams SET status = ?, updated_at = ? WHERE id = ?', ['confirmed', nowSeoulStamp(), id]);
+    return db.get('SELECT * FROM exams WHERE id = ?', [id]);
+  });
+}
+
+/** 특정 학생의 제출 대기(pending) 시험 목록 */
+export async function listPendingExams(studentId) {
+  const db = getDb();
+  const rows = await db.all(
+    "SELECT * FROM exams WHERE student_id = ? AND status = 'pending' ORDER BY exam_date DESC, id DESC",
+    [studentId]
+  );
+  return rows.map((e) => ({ ...e, items: e.items_json ? JSON.parse(e.items_json) : null }));
 }
 
 export async function updateExam(id, body) {
@@ -103,7 +141,8 @@ export async function analyzeExams(studentId) {
   const db = getDb();
   const student = await db.get('SELECT * FROM students WHERE id = ?', [studentId]);
   if (!student) throw new NotFoundError('학생을 찾을 수 없습니다.');
-  const exams = await listExams(studentId);
+  // 분석·목표 비교는 확정(confirmed)된 기록만 사용. 학생 제출(pending)은 제외.
+  const exams = (await listExams(studentId)).filter((e) => (e.status || 'confirmed') === 'confirmed');
 
   const school = exams.filter((e) => e.exam_type === 'school').sort((a, b) => a.exam_date.localeCompare(b.exam_date));
   const mock = exams.filter((e) => e.exam_type === 'mock').sort((a, b) => a.exam_date.localeCompare(b.exam_date));
