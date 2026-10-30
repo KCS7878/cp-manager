@@ -132,6 +132,10 @@ CREATE TABLE IF NOT EXISTS exams (
   feedback    TEXT,
   -- 모의고사 문항별 결과 JSON: { "1":"o"|"x"|null, ... "45": ... , "typeMap": {...} }
   items_json  TEXT,
+  -- 학생 자가 입력(제출) 지원: status='confirmed'(확정) | 'pending'(학생 제출, 승인 대기)
+  -- submitted_by='teacher' | 'student'. 분석/목표는 confirmed 만 집계한다.
+  status        TEXT NOT NULL DEFAULT 'confirmed',
+  submitted_by  TEXT NOT NULL DEFAULT 'teacher',
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL
 );

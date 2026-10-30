@@ -813,3 +813,16 @@ table.data tr:hover td { background: #fffaf3; }
   /* 좁은 화면에선 세로로 쌓이게 (form-grid 가 1fr 로 바뀌므로 함께 해제) */
   .word-score-row { grid-template-columns: 1fr; align-items: stretch; }
 }
+
+/* ---------- 선생님 화면: 학생이 제출한 점수(승인 대기) ---------- */
+.pending-exams {
+  border: 1px solid #e7a84d;
+  background: #fff8ec;
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+}
+.pending-head {
+  display: flex; justify-content: space-between; align-items: center;
+  flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem;
+}
+.pending-head strong { color: #9a6e1d; }

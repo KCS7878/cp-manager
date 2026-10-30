@@ -9,6 +9,12 @@ export function renderExams(ctx) {
   wrap.appendChild(h('div', { class: 'btn-row', style: { marginBottom: '0.6rem' } },
     h('button', { class: 'btn sm', onClick: () => openExamForm(ctx, null) }, '+ 시험 기록 추가')));
 
+  // 학생이 제출한 점수(승인 대기) — 있으면 상단에 눈에 띄게 표시
+  const pending = exams.filter((e) => e.submitted_by === 'student' && e.status === 'pending');
+  if (pending.length) {
+    wrap.appendChild(renderPendingExams(ctx, pending));
+  }
+
   // 추세 + 목표
   if (analysis) {
     const goals = analysis.goals;
@@ -29,12 +35,14 @@ export function renderExams(ctx) {
     }
   }
 
-  if (!exams.length) {
+  // 정식(확정) 기록만 아래 목록에 표시. 학생 제출(pending)은 위의 승인 섹션에서 처리.
+  const confirmedExams = exams.filter((e) => (e.status || 'confirmed') === 'confirmed');
+  if (!confirmedExams.length) {
     wrap.appendChild(h('div', { class: 'empty' }, '시험 기록이 없습니다.'));
     return wrap;
   }
 
-  const rows = exams.map((e) =>
+  const rows = confirmedExams.map((e) =>
     h('tr', {},
       h('td', { 'data-label': '종류' }, e.exam_type === 'mock' ? '모의고사' : '내신'),
       h('td', { 'data-label': '시험명', class: 'wrap-anywhere' }, e.exam_name),
@@ -175,6 +183,47 @@ async function delExam(ctx, e) {
   const ok = await confirmDialog(`'${e.exam_name}' 시험 기록을 삭제하시겠습니까?`, { title: '시험 기록 삭제', confirmText: '삭제' });
   if (!ok) return;
   try { await api.del(`/api/exams/${e.id}`); toast('삭제되었습니다.', 'success'); ctx.reload(); }
+  catch (err) { toast(err.message, 'error'); }
+}
+
+// 학생이 제출한 점수(승인 대기) 목록 + 승인/거절
+function renderPendingExams(ctx, pending) {
+  const EXAM_LABEL = { school: '내신', mock: '모의고사' };
+  const rows = pending.map((e) => h('tr', {},
+    h('td', { 'data-label': '종류' }, EXAM_LABEL[e.exam_type] || e.exam_type),
+    h('td', { 'data-label': '시험명', class: 'wrap-anywhere' }, e.exam_name),
+    h('td', { 'data-label': '시험일' }, e.exam_date),
+    h('td', { 'data-label': '점수' }, (e.score != null ? `${e.score}점` : '-') + (e.grade ? ` (${e.grade}등급)` : '')),
+    h('td', { 'data-label': '' }, h('div', { class: 'btn-row' },
+      h('button', { class: 'btn sm sage', onClick: () => confirmExam(ctx, e) }, '승인'),
+      h('button', { class: 'btn sm danger', onClick: () => rejectExam(ctx, e) }, '거절'),
+    )),
+  ));
+  return h('div', { class: 'pending-exams', style: { marginBottom: '0.9rem' } },
+    h('div', { class: 'pending-head' },
+      h('strong', {}, `🙋 학생이 제출한 점수 ${pending.length}건`),
+      h('span', { class: 'muted', style: { fontSize: '0.8rem' } }, '승인하면 성적·분석에 반영됩니다.'),
+    ),
+    h('div', { class: 'card-table' }, h('div', { class: 'table-scroll' },
+      h('table', { class: 'data' },
+        h('thead', {}, h('tr', {}, h('th', {}, '종류'), h('th', {}, '시험명'), h('th', {}, '시험일'), h('th', {}, '점수'), h('th', {}, ''))),
+        h('tbody', {}, ...rows)))),
+  );
+}
+
+async function confirmExam(ctx, e) {
+  try {
+    await api.post(`/api/exams/${e.id}/confirm`, {});
+    toast('승인되었습니다. 성적에 반영됩니다.', 'success');
+    ctx.reload();
+  } catch (err) { toast(err.message, 'error'); }
+}
+
+async function rejectExam(ctx, e) {
+  const ok = await confirmDialog(`'${e.exam_name}' (${e.score != null ? e.score + '점' : ''}) 제출을 거절(삭제)하시겠습니까?`,
+    { title: '제출 거절', confirmText: '거절', detail: '학생이 제출한 이 점수가 삭제됩니다.' });
+  if (!ok) return;
+  try { await api.del(`/api/exams/${e.id}`); toast('거절되었습니다.', 'success'); ctx.reload(); }
   catch (err) { toast(err.message, 'error'); }
 }
 

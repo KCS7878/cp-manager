@@ -140,6 +140,14 @@ export async function getStudentPublicView(studentId) {
   const lessons = await listLessons(studentId);
   const exams = await listExams(studentId);
   const examAnalysis = await analyzeExams(studentId);
+  // 학생이 직접 제출한 점수 목록(대기/승인 상태 표시용). 최근순 일부만.
+  const mySubmittedExams = exams
+    .filter((e) => e.submitted_by === 'student')
+    .slice(0, 20)
+    .map((e) => ({
+      id: e.id, exam_type: e.exam_type, exam_name: e.exam_name, exam_date: e.exam_date,
+      score: e.score, grade: e.grade, status: e.status,
+    }));
   const inventory = await listInventory(studentId);
   const ledger = await getLedger(db, studentId, 100);
   const products = await listProductsForStudent(s.teacher_id, studentId); // 상점 (판매중, 학생 적용가)
@@ -165,6 +173,8 @@ export async function getStudentPublicView(studentId) {
     ledger, // 최근 지급 내역 (읽기 전용)
     wordTrend,
     examAnalysis,
+    mySubmittedExams, // 학생이 제출한 점수(대기/승인)
+    teacherId: s.teacher_id,
     inventory,
     products: products.map((p) => ({ id: p.id, name: p.name, description: p.description, image_url: p.image_url, effective_cp: p.effective_cp, price_krw: p.price_krw })),
     ranking: {

@@ -3,7 +3,7 @@ import { getDb } from './connection.js';
 import { nowSeoulStamp } from '../lib/time.js';
 import { SCHEMA_SQL } from './schema-sql.js';
 
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** 테이블에 특정 컬럼이 있는지 확인 */
 async function hasColumn(db, table, column) {
@@ -61,6 +61,18 @@ export async function runMigrations() {
         const students = await db.all('SELECT id FROM students WHERE access_code IS NULL OR access_code = ?', ['']);
         for (const s of students) {
           await db.run('UPDATE students SET access_code = ? WHERE id = ?', [await uniqueCode(db, 'S', 'students'), s.id]);
+        }
+      },
+    },
+    {
+      to: 3,
+      up: async (db) => {
+        // 학생 자가 점수 입력(제출→승인) 지원 컬럼. 기존 행은 모두 확정(confirmed)/교사(teacher).
+        if (!(await hasColumn(db, 'exams', 'status'))) {
+          await db.run("ALTER TABLE exams ADD COLUMN status TEXT NOT NULL DEFAULT 'confirmed'", []);
+        }
+        if (!(await hasColumn(db, 'exams', 'submitted_by'))) {
+          await db.run("ALTER TABLE exams ADD COLUMN submitted_by TEXT NOT NULL DEFAULT 'teacher'", []);
         }
       },
     },
