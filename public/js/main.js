@@ -5,7 +5,6 @@ import {
 } from './state.js';
 import { renderTeacherSelect } from './views/teacher-select.js';
 import { renderWorkspace } from './views/workspace.js';
-import { openWordWidget } from './views/word-widget.js';
 import { openRemote } from './views/remote.js';
 import { openRanking } from './views/ranking.js';
 import { openBackup } from './views/backup.js';
@@ -103,7 +102,6 @@ export const App = {
     const isTeacher = mode === 'teacher';
     show('btnQuickLesson', isTeacher);
     show('btnQuickWord', isTeacher);
-    show('btnWordWidget', isTeacher);
     show('btnRemote', isTeacher);
     show('btnRanking', isTeacher);
     show('btnBackup', isTeacher);
@@ -142,7 +140,6 @@ export const App = {
     document.getElementById('btnQuickLesson').onclick = () => this.quickEntry('lesson');
     document.getElementById('btnQuickWord').onclick = () => this.quickEntry('word');
 
-    document.getElementById('btnWordWidget').onclick = () => openWordWidget();
     document.getElementById('btnRemote').onclick = () => {
       if (!state.teacher) return toast('먼저 강사를 선택하세요.', 'error');
       openRemote(state.teacher);

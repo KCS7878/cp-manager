@@ -8,7 +8,6 @@ import { openGuideModal } from './guide.js';
 import { openRanking } from './ranking.js';
 import { openRemote } from './remote.js';
 import { openBackup } from './backup.js';
-import { openWordWidget } from './word-widget.js';
 
 const SECTION_KEYS = [
   'summary', 'lessons', 'exams', 'coach', 'ledger', 'guide', 'rules', 'shop',

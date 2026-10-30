@@ -99,10 +99,6 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
   const ea = data.examAnalysis;
   if (ea && ((ea.typeAccuracy && ea.typeAccuracy.length) || (ea.mockTrend && ea.mockTrend.length) || (ea.schoolTrend && ea.schoolTrend.length))) {
     const body = h('div', { class: 'section-body' }, h('h3', { class: 'sv-section-title' }, '📈 내 시험 분석'));
-    body.appendChild(h('div', { class: 'sv-goals' },
-      goalChip('모의 목표', s.mock_goal_type, s.mock_goal_value),
-      goalChip('내신 목표', s.exam_goal_type, s.exam_goal_value),
-    ));
 
     const mockScored = (ea.mockTrend || []).filter((e) => e.score != null);
     const schoolScored = (ea.schoolTrend || []).filter((e) => e.score != null);
@@ -120,6 +116,10 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
     function paintPanel() {
       paintTabs();
       clear(panel);
+      // 선택한 종류의 목표만 표시
+      panel.appendChild(h('div', { class: 'sv-goals' }, view === 'mock'
+        ? goalChip('모의 목표', s.mock_goal_type, s.mock_goal_value)
+        : goalChip('내신 목표', s.exam_goal_type, s.exam_goal_value)));
       if (view === 'mock') {
         if (mockScored.length) {
           panel.appendChild(countViewer({
