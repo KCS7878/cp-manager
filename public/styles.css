@@ -890,3 +890,26 @@ table.data tr:hover td { background: #fffaf3; }
 @media (max-width: 560px) {
   .tc-row { grid-template-columns: 5.5rem 1fr 2.4rem; }
 }
+
+/* ---------- 10행 노출 내부 스크롤 (헤더 고정) ---------- */
+.rows-scroll-10 {
+  max-height: 420px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.rows-scroll-10 table.data thead th { position: sticky; top: 0; z-index: 1; }
+
+/* ---------- 표시 개수 선택(5/10/전체) 컨트롤 ---------- */
+.count-viewer-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
+}
+.cv-title { font-size: 0.86rem; font-weight: 700; color: var(--navy); }
+.cv-chips { display: inline-flex; gap: 0.25rem; background: #f1efe9; padding: 0.2rem; border-radius: 9px; margin-left: auto; }
+.cv-chip {
+  border: none; background: transparent; cursor: pointer;
+  padding: 0.25rem 0.6rem; border-radius: 7px; font-size: 0.78rem; font-weight: 700; color: #8a94a1;
+  transition: background 0.15s, color 0.15s;
+}
+.cv-chip.active { background: #fff; color: var(--coral-dark); box-shadow: var(--shadow); }
