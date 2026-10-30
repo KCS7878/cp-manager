@@ -826,3 +826,28 @@ table.data tr:hover td { background: #fffaf3; }
   flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.5rem;
 }
 .pending-head strong { color: #9a6e1d; }
+
+/* ---------- 학생 점수 제출: 45문항 간단 O/X 체크 ---------- */
+.omr-section { margin-top: 0.8rem; border-top: 1px solid var(--border); padding-top: 0.8rem; }
+.omr-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
+.omr-head strong { font-size: 0.95rem; color: var(--navy); }
+/* 번호당 버튼 1개 — 탭하면 O↔X 토글 */
+.omr-simple {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
+  gap: 0.3rem;
+  margin-top: 0.2rem;
+}
+.omr-cell {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: 8px; background: #fff;
+  padding: 0.3rem 0; cursor: pointer; line-height: 1.1;
+  transition: background 0.12s, border-color 0.12s;
+}
+.omr-cell .omr-no { font-size: 0.68rem; color: #8a94a1; }
+.omr-cell .omr-mk { font-size: 0.95rem; font-weight: 800; }
+.omr-cell.is-o { background: #eef6f0; border-color: #cfe3d4; }
+.omr-cell.is-o .omr-mk { color: var(--sage); }
+.omr-cell.is-x { background: #fdeaea; border-color: #f3c6c6; }
+.omr-cell.is-x .omr-mk { color: var(--danger); }
+.omr-wrong-info { margin-top: 0.5rem; font-size: 0.82rem; font-weight: 600; }
