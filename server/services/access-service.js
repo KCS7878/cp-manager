@@ -159,9 +159,9 @@ export async function getStudentPublicView(studentId) {
   const myCumRank = (cumulative.rows.find((r) => r.student_id === studentId) || {});
   const myMonRank = (monthly.rows.find((r) => r.student_id === studentId) || {});
 
-  // 단어시험 추세
+  // 단어시험 추세 (lessons 는 최신순 DESC → 최근 10개는 '앞쪽' 10개)
   const wordLessons = lessons.filter((l) => l.word_status === 'taken' && l.word_score != null);
-  const wordTrend = wordLessons.slice(-10).map((l) => ({ date: l.lesson_date, score: l.word_score, range: l.word_range, deadlineMet: !!l.deadline_met }));
+  const wordTrend = wordLessons.slice(0, 10).map((l) => ({ date: l.lesson_date, score: l.word_score, range: l.word_range, deadlineMet: !!l.deadline_met }));
 
   return {
     student: {
