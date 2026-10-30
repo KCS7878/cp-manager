@@ -1,4 +1,4 @@
-import { h, openModal, modalShell, toast, confirmDialog } from '../../ui.js';
+import { h, clear, openModal, modalShell, toast, confirmDialog } from '../../ui.js';
 import { api } from '../../api.js';
 
 export function renderExams(ctx) {
@@ -15,61 +15,111 @@ export function renderExams(ctx) {
     wrap.appendChild(renderPendingExams(ctx, pending));
   }
 
-  // 추세 + 목표
-  if (analysis) {
-    const goals = analysis.goals;
-    wrap.appendChild(h('div', { class: 'summary-grid', style: { marginBottom: '0.75rem' } },
-      miniTrend('모의고사', analysis.mockTrend, goals.mock),
-      miniTrend('내신', analysis.schoolTrend, goals.school),
-    ));
+  // 확정 기록만 분석·목록에 사용 (학생 제출 pending 은 위 승인 섹션에서 처리)
+  const confirmedExams = exams.filter((e) => (e.status || 'confirmed') === 'confirmed');
 
-    // 점수 막대그래프 (모의고사 / 내신)
-    const mockChart = renderScoreChart('모의고사 점수 추이', analysis.mockTrend, goals.mock);
-    const schoolChart = renderScoreChart('내신 점수 추이', analysis.schoolTrend, goals.school);
-    if (mockChart) wrap.appendChild(mockChart);
-    if (schoolChart) wrap.appendChild(schoolChart);
+  // ── 내신/모의고사 토글 ──
+  let view = 'mock'; // 'mock' | 'school'
+  const tabbar = h('div', { class: 'exam-tabbar' });
+  const panel = h('div', {});
+  function paintTabs() {
+    clear(tabbar);
+    [['mock', '모의고사'], ['school', '내신']].forEach(([key, label]) => {
+      tabbar.appendChild(h('button', { class: 'exam-tab' + (view === key ? ' active' : ''), onClick: () => { view = key; paint(); } }, label));
+    });
+  }
+  function paint() {
+    paintTabs();
+    clear(panel);
+    const goals = analysis ? analysis.goals : { mock: {}, school: {} };
+    const trend = analysis ? (view === 'mock' ? analysis.mockTrend : analysis.schoolTrend) : [];
+    const goal = view === 'mock' ? goals.mock : goals.school;
+    const label = view === 'mock' ? '모의고사' : '내신';
 
-    if (analysis.weakTypes && analysis.weakTypes.length) {
-      wrap.appendChild(h('div', { class: 'hint', style: { marginBottom: '0.6rem' } },
-        '반복 취약 유형: ' + analysis.weakTypes.map((t) => `${t.type}(${t.rate}%)`).join(', ')));
+    // 요약
+    panel.appendChild(miniTrend(label, trend, goal));
+
+    // 점수 추이 막대그래프
+    const chart = renderScoreChart(`${label} 점수 추이`, trend, goal);
+    if (chart) panel.appendChild(chart);
+    else panel.appendChild(h('div', { class: 'empty' }, `${label} 점수 기록이 없습니다.`));
+
+    // 모의고사: 유형별 강약점 막대그래프
+    if (view === 'mock' && analysis && analysis.typeAccuracy && analysis.typeAccuracy.length) {
+      panel.appendChild(renderTypeChart(analysis.typeAccuracy));
+    }
+
+    // 종류별 시험 목록
+    const list = confirmedExams.filter((e) => e.exam_type === view);
+    if (list.length) {
+      const rows = list.map((e) => h('tr', {},
+        h('td', { 'data-label': '시험명', class: 'wrap-anywhere' }, e.exam_name),
+        h('td', { 'data-label': '시험일' }, e.exam_date),
+        h('td', { 'data-label': '점수' }, e.score != null ? `${e.score}점` : '-'),
+        h('td', { 'data-label': '등급' }, e.grade || '-'),
+        h('td', { 'data-label': '약점', class: 'wrap-anywhere' }, e.weakness || '-'),
+        h('td', { 'data-label': '' }, h('div', { class: 'btn-row' },
+          h('button', { class: 'btn sm secondary', onClick: () => openExamForm(ctx, e) }, '수정'),
+          h('button', { class: 'btn sm danger', onClick: () => delExam(ctx, e) }, '삭제'))))
+      );
+      panel.appendChild(h('div', { class: 'card-table', style: { marginTop: '0.8rem' } },
+        h('div', { class: 'table-scroll' },
+          h('table', { class: 'data' },
+            h('thead', {}, h('tr', {}, h('th', {}, '시험명'), h('th', {}, '시험일'), h('th', {}, '점수'), h('th', {}, '등급'), h('th', {}, '약점'), h('th', {}, ''))),
+            h('tbody', {}, ...rows)))));
+    } else {
+      panel.appendChild(h('div', { class: 'empty', style: { marginTop: '0.6rem' } }, `${label} 시험 기록이 없습니다.`));
     }
   }
 
-  // 정식(확정) 기록만 아래 목록에 표시. 학생 제출(pending)은 위의 승인 섹션에서 처리.
-  const confirmedExams = exams.filter((e) => (e.status || 'confirmed') === 'confirmed');
-  if (!confirmedExams.length) {
-    wrap.appendChild(h('div', { class: 'empty' }, '시험 기록이 없습니다.'));
-    return wrap;
-  }
-
-  const rows = confirmedExams.map((e) =>
-    h('tr', {},
-      h('td', { 'data-label': '종류' }, e.exam_type === 'mock' ? '모의고사' : '내신'),
-      h('td', { 'data-label': '시험명', class: 'wrap-anywhere' }, e.exam_name),
-      h('td', { 'data-label': '시험일' }, e.exam_date),
-      h('td', { 'data-label': '점수' }, e.score != null ? `${e.score}점` : '-'),
-      h('td', { 'data-label': '등급' }, e.grade || '-'),
-      h('td', { 'data-label': '약점', class: 'wrap-anywhere' }, e.weakness || '-'),
-      h('td', { 'data-label': '' }, h('div', { class: 'btn-row' },
-        h('button', { class: 'btn sm secondary', onClick: () => openExamForm(ctx, e) }, '수정'),
-        h('button', { class: 'btn sm danger', onClick: () => delExam(ctx, e) }, '삭제'))))
-  );
-  wrap.appendChild(h('div', { class: 'card-table' },
-    h('div', { class: 'table-scroll' },
-      h('table', { class: 'data' },
-        h('thead', {}, h('tr', {}, h('th', {}, '종류'), h('th', {}, '시험명'), h('th', {}, '시험일'), h('th', {}, '점수'), h('th', {}, '등급'), h('th', {}, '약점'), h('th', {}, ''))),
-        h('tbody', {}, ...rows)))));
+  wrap.appendChild(tabbar);
+  wrap.appendChild(panel);
+  paint();
   return wrap;
 
   function miniTrend(label, trend, goal) {
     const last = trend[trend.length - 1];
-    const goalTxt = goal.type === 'undecided' || !goal.value ? '목표 미정' : `목표 ${goal.value}${goal.type === 'score' ? '점' : ''}`;
-    return h('div', { class: 'stat-box' },
-      h('div', { class: 'l' }, label),
+    const goalTxt = !goal || goal.type === 'undecided' || !goal.value ? '목표 미정' : `목표 ${goal.value}${goal.type === 'score' ? '점' : '등급'}`;
+    return h('div', { class: 'stat-box', style: { marginBottom: '0.75rem' } },
+      h('div', { class: 'l' }, `${label} 최근 성적`),
       h('div', { class: 'v', style: { fontSize: '1.2rem' } }, last && last.score != null ? `${last.score}점` : '-'),
       h('div', { class: 'l' }, goalTxt),
       h('div', { class: 'l muted' }, `${trend.length}회 기록`));
   }
+}
+
+// 모의고사 유형별 정답률 막대그래프 (약한 순 = 위에서부터 보강 우선).
+// 정답률 0% 여도 최소 폭을 줘서 '바닥에 조금 있다'는 걸 눈으로 알 수 있게 한다.
+function renderTypeChart(typeAccuracy) {
+  // rate 가 null(미입력)인 유형은 제외, 낮은 순 정렬
+  const list = typeAccuracy.filter((t) => t.rate !== null).slice().sort((a, b) => a.rate - b.rate);
+  if (!list.length) return h('div', {});
+
+  const bars = list.map((t) => {
+    const pct = t.rate;
+    let cls = 'bar-green';
+    if (pct < 50) cls = 'bar-red';
+    else if (pct < 70) cls = 'bar-orange';
+    // 0% 여도 최소 1.5% 폭으로 보이게 (시인성)
+    const width = Math.max(1.5, pct);
+    return h('div', { class: 'tc-row' },
+      h('div', { class: 'tc-label' }, h('span', { class: 'tc-type wrap-anywhere' }, t.type), h('span', { class: 'tc-frac muted' }, `${t.correct}/${t.total}`)),
+      h('div', { class: 'tc-track' }, h('div', { class: `tc-fill ${cls}`, style: { width: width + '%' } })),
+      h('div', { class: 'tc-pct' }, `${pct}%`),
+    );
+  });
+
+  return h('div', { class: 'word-chart', style: { marginTop: '0.8rem' } },
+    h('div', { class: 'wc-head' },
+      h('strong', {}, '유형별 강·약점 (정답률)'),
+      h('span', { class: 'wc-legend' },
+        h('span', { class: 'wc-dot bar-red' }), '약함 ',
+        h('span', { class: 'wc-dot bar-orange' }), '보통 ',
+        h('span', { class: 'wc-dot bar-green' }), '강함'),
+    ),
+    h('div', { class: 'hint', style: { margin: '0 0 0.5rem' } }, '위에서부터 정답률이 낮은(먼저 보강할) 유형입니다.'),
+    ...bars,
+  );
 }
 
 // 내신/모의고사 점수 막대그래프. trend 는 과거→현재 순 [{date,name,score,grade}].

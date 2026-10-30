@@ -3,7 +3,7 @@ import { getDb } from './connection.js';
 import { nowSeoulStamp } from '../lib/time.js';
 import { SCHEMA_SQL } from './schema-sql.js';
 
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** 테이블에 특정 컬럼이 있는지 확인 */
 async function hasColumn(db, table, column) {
@@ -73,6 +73,15 @@ export async function runMigrations() {
         }
         if (!(await hasColumn(db, 'exams', 'submitted_by'))) {
           await db.run("ALTER TABLE exams ADD COLUMN submitted_by TEXT NOT NULL DEFAULT 'teacher'", []);
+        }
+      },
+    },
+    {
+      to: 4,
+      up: async (db) => {
+        // 학생 구매 희망(요청→승인) 지원. 기존 구매는 모두 confirmed.
+        if (!(await hasColumn(db, 'purchases', 'status'))) {
+          await db.run("ALTER TABLE purchases ADD COLUMN status TEXT NOT NULL DEFAULT 'confirmed'", []);
         }
       },
     },

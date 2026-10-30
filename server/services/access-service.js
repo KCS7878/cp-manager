@@ -4,7 +4,7 @@ import { uniqueCode } from '../db/migrate.js';
 import { getStudentBalance, getLedger } from './ledger-service.js';
 import { analyzeExams, listExams } from './exam-service.js';
 import { listLessons } from './lesson-service.js';
-import { listInventory, listProductsForStudent } from './shop-service.js';
+import { listInventory, listProductsForStudent, listPurchaseRequests } from './shop-service.js';
 import { getRanking } from './ranking-service.js';
 import { NotFoundError, ValidationError } from '../lib/validation.js';
 
@@ -151,6 +151,7 @@ export async function getStudentPublicView(studentId) {
   const inventory = await listInventory(studentId);
   const ledger = await getLedger(db, studentId, 100);
   const products = await listProductsForStudent(s.teacher_id, studentId); // 상점 (판매중, 학생 적용가)
+  const myPurchaseRequests = await listPurchaseRequests(null, studentId); // 내가 구매 희망한 상품(승인 대기)
 
   // 랭킹(누적·이번달 둘 다) — 본인 teacher 범위 전체
   const cumulative = await getRanking(s.teacher_id, { basis: 'cumulative', filter: {} });
@@ -174,6 +175,7 @@ export async function getStudentPublicView(studentId) {
     wordTrend,
     examAnalysis,
     mySubmittedExams, // 학생이 제출한 점수(대기/승인)
+    myPurchaseRequests: myPurchaseRequests.map((r) => ({ id: r.id, product_id: r.product_id, product_name: r.product_name })),
     teacherId: s.teacher_id,
     inventory,
     products: products.map((p) => ({ id: p.id, name: p.name, description: p.description, image_url: p.image_url, effective_cp: p.effective_cp, price_krw: p.price_krw })),

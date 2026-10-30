@@ -212,10 +212,12 @@ CREATE TABLE IF NOT EXISTS purchases (
   product_id     INTEGER REFERENCES products(id) ON DELETE SET NULL,
   product_name   TEXT NOT NULL,            -- 구매 시점 상품명 스냅샷
   cp_spent       INTEGER NOT NULL,         -- 사용한 CP
-  purchased_at   TEXT NOT NULL,            -- 구매일시
+  purchased_at   TEXT NOT NULL,            -- 구매일시(희망은 요청일시)
   inventory_state TEXT NOT NULL DEFAULT 'owned', -- 'owned'(보유)|'used'(사용완료)
   used_at        TEXT,                     -- 사용일
   ledger_id      INTEGER,                  -- 차감 장부 ID
+  -- 학생 구매 희망(요청→승인) 지원: 'confirmed'(정식 구매) | 'requested'(학생 희망, CP 미차감)
+  status         TEXT NOT NULL DEFAULT 'confirmed',
   created_at     TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_purchases_student ON purchases(student_id);

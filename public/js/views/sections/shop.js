@@ -4,6 +4,11 @@ import { state } from '../../state.js';
 
 export function renderShop(ctx) {
   const wrap = h('div', {});
+
+  // 학생이 보낸 구매 희망(승인 대기) — 있으면 맨 위에 표시
+  const reqs = (ctx.detail && ctx.detail.purchaseRequests) || [];
+  if (reqs.length) wrap.appendChild(renderPurchaseRequests(ctx, reqs));
+
   const tabbar = h('div', { class: 'tab-bar' });
   const content = h('div', {});
   const tabs = [['store', '🛒 상점'], ['purchases', '🧾 구매내역'], ['inventory', '🎒 인벤토리·사용내역']];
@@ -122,6 +127,45 @@ async function renderInventory(ctx, content) {
 
 async function setState(ctx, p, st) {
   try { await api.put(`/api/purchases/${p.id}/state`, { state: st }); toast('처리되었습니다.', 'success'); ctx.reload(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+// ---- 학생 구매 희망(승인 대기) ----
+function renderPurchaseRequests(ctx, reqs) {
+  const rows = reqs.map((r) => h('tr', {},
+    h('td', { 'data-label': '상품', class: 'wrap-anywhere' }, r.product_name),
+    h('td', { 'data-label': '희망일' }, (r.purchased_at || '').slice(0, 10)),
+    h('td', { 'data-label': '필요 CP' }, `${r.cp_spent} CP`),
+    h('td', { 'data-label': '' }, h('div', { class: 'btn-row' },
+      h('button', { class: 'btn sm sage', onClick: () => approveRequest(ctx, r) }, '승인'),
+      h('button', { class: 'btn sm danger', onClick: () => rejectRequest(ctx, r) }, '거절'),
+    )),
+  ));
+  return h('div', { class: 'pending-exams', style: { marginBottom: '0.9rem' } },
+    h('div', { class: 'pending-head' },
+      h('strong', {}, `🛒 학생이 구매를 희망한 상품 ${reqs.length}건`),
+      h('span', { class: 'muted', style: { fontSize: '0.8rem' } }, '승인하면 CP가 차감되고 교환됩니다.'),
+    ),
+    h('div', { class: 'card-table' }, h('div', { class: 'table-scroll' },
+      h('table', { class: 'data' },
+        h('thead', {}, h('tr', {}, h('th', {}, '상품'), h('th', {}, '희망일'), h('th', {}, '필요 CP'), h('th', {}, ''))),
+        h('tbody', {}, ...rows)))),
+  );
+}
+
+async function approveRequest(ctx, r) {
+  const ok = await confirmDialog(`'${r.product_name}' 구매 희망을 승인하시겠습니까?`,
+    { title: '구매 희망 승인', confirmText: '승인', detail: `${r.cp_spent} CP가 차감되고 학생 인벤토리에 추가됩니다.` });
+  if (!ok) return;
+  try { await api.post(`/api/purchases/${r.id}/approve`, {}); toast('승인되었습니다. CP가 차감되었습니다.', 'success'); ctx.reload(); }
+  catch (e) { toast(e.message, 'error'); }
+}
+
+async function rejectRequest(ctx, r) {
+  const ok = await confirmDialog(`'${r.product_name}' 구매 희망을 거절하시겠습니까?`,
+    { title: '구매 희망 거절', confirmText: '거절', detail: '학생의 구매 희망이 삭제됩니다. (CP 변동 없음)' });
+  if (!ok) return;
+  try { await api.post(`/api/purchases/${r.id}/reject`, {}); toast('거절되었습니다.', 'success'); ctx.reload(); }
   catch (e) { toast(e.message, 'error'); }
 }
 

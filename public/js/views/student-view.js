@@ -1,5 +1,5 @@
 // 학생 읽기 전용 화면. 편집 기능 없음.
-import { h, clear, toast, loadingEl, errorEl, openModal, modalShell } from '../ui.js';
+import { h, clear, toast, loadingEl, errorEl, openModal, modalShell, confirmDialog } from '../ui.js';
 import { api } from '../api.js';
 
 export async function renderStudentView(root, studentId, { onExit } = {}) {
@@ -118,11 +118,20 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
   // ── 점수 입력 (학생이 시험/모의고사 점수를 제출 → 선생님 승인) ──
   wrap.appendChild(renderScoreSubmit(studentId, data, () => renderStudentView(root, studentId, { onExit })));
 
-  // 상점 (구매 가능한 상품 — 읽기 전용, 교환은 선생님에게)
+  // 상점 (구매 희망 보내기 — 선생님 승인 시 교환)
   if (data.products && data.products.length) {
+    const requestedIds = new Set((data.myPurchaseRequests || []).map((r) => r.product_id));
     const grid = h('div', { class: 'product-grid' });
     for (const p of data.products) {
       const affordable = cp.available >= p.effective_cp;
+      const alreadyRequested = requestedIds.has(p.id);
+      const actionEl = alreadyRequested
+        ? h('div', { class: 'sv-requested' }, '🕑 구매 희망함 (선생님 확인 중)')
+        : h('button', {
+            class: 'btn sm' + (affordable ? '' : ' secondary'),
+            style: { width: '100%', marginTop: '0.3rem' },
+            onClick: () => requestPurchase(studentId, p, affordable, () => renderStudentView(root, studentId, { onExit })),
+          }, affordable ? '🛒 구매 희망하기' : '🛒 구매 희망 (CP 부족)');
       grid.appendChild(h('div', { class: 'product-card' + (affordable ? '' : ' p-ended') },
         p.image_url ? h('img', { src: p.image_url, alt: p.name }) : h('div', { class: 'p-noimg' }, '🎁'),
         h('div', { class: 'p-body' },
@@ -130,12 +139,13 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
           p.description ? h('div', { class: 'muted wrap-anywhere', style: { fontSize: '0.8rem' } }, p.description) : null,
           h('div', { class: 'p-cp' }, `${p.effective_cp} CP`),
           h('div', { class: affordable ? 'sv-afford' : 'sv-notafford' }, affordable ? '✅ 교환 가능' : `${p.effective_cp - cp.available} CP 더 필요`),
+          actionEl,
         )));
     }
     wrap.appendChild(h('div', { class: 'card' },
       h('div', { class: 'section-body' },
         h('h3', { class: 'sv-section-title' }, '🛒 상점 (CP로 교환 가능한 상품)'),
-        h('p', { class: 'muted', style: { marginTop: '-0.3rem', marginBottom: '0.7rem', fontSize: '0.84rem' } }, '교환을 원하면 선생님께 말씀하세요. (이 화면은 보기 전용)'),
+        h('p', { class: 'muted', style: { marginTop: '-0.3rem', marginBottom: '0.7rem', fontSize: '0.84rem' } }, '원하는 상품의 “구매 희망하기”를 누르면 선생님께 신청됩니다. 선생님이 확인·승인하면 CP가 차감되고 교환됩니다.'),
         grid,
       )));
   }
@@ -335,6 +345,20 @@ function openScoreForm(studentId, reload) {
       footer: [h('button', { class: 'btn secondary', onClick: close }, '취소'), h('button', { class: 'btn', onClick: save }, '제출')],
     });
   });
+}
+
+// 학생이 상품 구매를 희망(신청)
+async function requestPurchase(studentId, product, affordable, reload) {
+  const detail = affordable
+    ? `${product.effective_cp} CP가 필요합니다. 선생님이 승인하면 CP가 차감되고 교환됩니다.`
+    : `현재 보유 CP가 부족하지만 희망 신청은 가능합니다. (필요 ${product.effective_cp} CP) 선생님이 확인합니다.`;
+  const ok = await confirmDialog(`'${product.name}' 구매를 희망하시겠습니까?`, { title: '구매 희망', confirmText: '희망 신청', detail });
+  if (!ok) return;
+  try {
+    await api.post(`/api/students/${studentId}/purchase/request`, { product_id: product.id });
+    toast('구매 희망이 선생님께 전달되었습니다.', 'success');
+    reload();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 function todaySeoul() { return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10); }

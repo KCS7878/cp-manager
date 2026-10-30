@@ -57,7 +57,18 @@ export async function listStudents(teacherId, filters = {}) {
   const withCp = [];
   for (const s of rows) {
     const bal = await getStudentBalance(db, s.id);
-    withCp.push({ ...s, available_cp: bal.available, pending_cp: bal.pending, cumulative_cp: bal.cumulative });
+    // 강사 알림용: 학생발 변동(승인 대기 시험 + 구매 희망) 건수
+    const pe = await db.get("SELECT COUNT(*) AS c FROM exams WHERE student_id = ? AND status = 'pending' AND submitted_by = 'student'", [s.id]);
+    const pr = await db.get("SELECT COUNT(*) AS c FROM purchases WHERE student_id = ? AND status = 'requested'", [s.id]);
+    const pendingExams = pe ? Number(pe.c) : 0;
+    const pendingRequests = pr ? Number(pr.c) : 0;
+    withCp.push({
+      ...s,
+      available_cp: bal.available, pending_cp: bal.pending, cumulative_cp: bal.cumulative,
+      pending_exams: pendingExams,
+      purchase_requests: pendingRequests,
+      pending_total: pendingExams + pendingRequests,
+    });
   }
 
   // 정렬

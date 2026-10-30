@@ -139,8 +139,8 @@ export async function purchase(studentId, productId) {
       immediate: true,
     });
     const info = await db.run(
-      `INSERT INTO purchases (student_id, product_id, product_name, cp_spent, purchased_at, inventory_state, ledger_id, created_at)
-         VALUES (?,?,?,?,?,'owned',?,?)`,
+      `INSERT INTO purchases (student_id, product_id, product_name, cp_spent, purchased_at, inventory_state, ledger_id, status, created_at)
+         VALUES (?,?,?,?,?,'owned',?, 'confirmed', ?)`,
       [studentId, productId, product.name, price, stamp, ledgerId, stamp]
     );
     // 장부 source_id를 purchase id로 갱신
@@ -161,30 +161,97 @@ export async function refundPurchase(purchaseId) {
   });
 }
 
-/** 구매내역 (담당 학생 전체 또는 특정 학생) */
+/** 구매내역 (담당 학생 전체 또는 특정 학생) — 정식 구매(confirmed)만 */
 export async function listPurchases(teacherId, studentId = null, limit = 200) {
   const db = getDb();
   if (studentId) {
     return db.all(
-      'SELECT p.*, s.name AS student_name FROM purchases p JOIN students s ON s.id = p.student_id WHERE p.student_id = ? ORDER BY p.purchased_at DESC LIMIT ?',
+      "SELECT p.*, s.name AS student_name FROM purchases p JOIN students s ON s.id = p.student_id WHERE p.student_id = ? AND p.status = 'confirmed' ORDER BY p.purchased_at DESC LIMIT ?",
       [studentId, limit]
     );
   }
   return db.all(
     `SELECT p.*, s.name AS student_name FROM purchases p
        JOIN students s ON s.id = p.student_id
-       WHERE s.teacher_id = ? ORDER BY p.purchased_at DESC LIMIT ?`,
+       WHERE s.teacher_id = ? AND p.status = 'confirmed' ORDER BY p.purchased_at DESC LIMIT ?`,
     [teacherId, limit]
   );
 }
 
-/** 인벤토리 (학생별) */
+/** 인벤토리 (학생별) — 정식 구매(confirmed)만 */
 export async function listInventory(studentId) {
   const db = getDb();
   return db.all(
-    'SELECT * FROM purchases WHERE student_id = ? ORDER BY purchased_at DESC',
+    "SELECT * FROM purchases WHERE student_id = ? AND status = 'confirmed' ORDER BY purchased_at DESC",
     [studentId]
   );
+}
+
+// ---- 구매 희망 (학생 요청 → 강사 승인) ----
+
+/** 학생이 특정 상품 구매를 희망(요청). CP는 차감하지 않고 요청만 기록. */
+export async function requestPurchase(studentId, productId) {
+  return transaction(async (db) => {
+    const student = await db.get('SELECT * FROM students WHERE id = ?', [studentId]);
+    if (!student) throw new NotFoundError('학생을 찾을 수 없습니다.');
+    const product = await db.get('SELECT * FROM products WHERE id = ?', [productId]);
+    if (!product) throw new NotFoundError('상품을 찾을 수 없습니다.');
+    if (product.status !== 'active') throw new ConflictError('판매 종료된 상품입니다.');
+
+    // 같은 상품에 대한 중복 희망 방지
+    const dup = await db.get(
+      "SELECT id FROM purchases WHERE student_id = ? AND product_id = ? AND status = 'requested'",
+      [studentId, productId]
+    );
+    if (dup) throw new ConflictError('이미 이 상품의 구매를 희망하셨습니다. 선생님 확인을 기다려 주세요.');
+
+    const price = await getEffectivePrice(db, studentId, product);
+    const stamp = nowSeoulStamp();
+    const info = await db.run(
+      `INSERT INTO purchases (student_id, product_id, product_name, cp_spent, purchased_at, inventory_state, status, created_at)
+         VALUES (?,?,?,?,?,'owned','requested',?)`,
+      [studentId, productId, product.name, price, stamp, stamp]
+    );
+    return db.get('SELECT * FROM purchases WHERE id = ?', [Number(info.lastInsertRowid)]);
+  });
+}
+
+/** 구매 희망(요청) 목록 — 특정 학생 또는 강사 전체 */
+export async function listPurchaseRequests(teacherId, studentId = null) {
+  const db = getDb();
+  if (studentId) {
+    return db.all(
+      "SELECT * FROM purchases WHERE student_id = ? AND status = 'requested' ORDER BY purchased_at DESC",
+      [studentId]
+    );
+  }
+  return db.all(
+    `SELECT p.*, s.name AS student_name FROM purchases p
+       JOIN students s ON s.id = p.student_id
+       WHERE s.teacher_id = ? AND p.status = 'requested' ORDER BY p.purchased_at DESC`,
+    [teacherId]
+  );
+}
+
+/** 구매 희망 승인 → 실제 구매 처리(CP 차감 + 보유). 요청 행은 제거하고 정식 구매를 생성. */
+export async function approvePurchaseRequest(purchaseId) {
+  const db = getDb();
+  const req = await db.get("SELECT * FROM purchases WHERE id = ? AND status = 'requested'", [purchaseId]);
+  if (!req) throw new NotFoundError('구매 희망 내역을 찾을 수 없습니다.');
+  if (!req.product_id) throw new ConflictError('해당 상품이 삭제되어 승인할 수 없습니다. 거절 후 다시 안내해 주세요.');
+  // 요청 행 제거 후, 기존 구매 로직으로 정식 구매(잔액 확인·CP 차감·보유 생성)
+  await db.run('DELETE FROM purchases WHERE id = ?', [purchaseId]);
+  return purchase(req.student_id, req.product_id);
+}
+
+/** 구매 희망 거절 → 요청 제거 */
+export async function rejectPurchaseRequest(purchaseId) {
+  return transaction(async (db) => {
+    const req = await db.get("SELECT * FROM purchases WHERE id = ? AND status = 'requested'", [purchaseId]);
+    if (!req) throw new NotFoundError('구매 희망 내역을 찾을 수 없습니다.');
+    await db.run('DELETE FROM purchases WHERE id = ?', [purchaseId]);
+    return { rejected: true };
+  });
 }
 
 /** 상품 사용 처리 / 되돌리기 */

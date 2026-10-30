@@ -212,6 +212,7 @@ CREATE TABLE IF NOT EXISTS purchases (
   inventory_state TEXT NOT NULL DEFAULT 'owned', -- 'owned'(보유)|'used'(사용완료)
   used_at        TEXT,                     -- 사용일
   ledger_id      INTEGER,                  -- 차감 장부 ID
+  status         TEXT NOT NULL DEFAULT 'confirmed', -- 'confirmed'(정식 구매) | 'requested'(학생 희망, CP 미차감)
   created_at     TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_purchases_student ON purchases(student_id);
