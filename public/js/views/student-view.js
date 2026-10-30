@@ -79,9 +79,10 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
         h('h3', { class: 'sv-section-title' }, '📚 내 단어시험 기록'),
         countViewer({
           total: data.wordTrend.length, default: 5,
+          // 표는 전체 행을 유지하고 limit 만큼의 '창 높이'로 스크롤(5개 보기여도 스크롤로 전체 열람)
           render: (lim) => scrollTable(
             ['날짜', '범위', '점수', '기한'],
-            data.wordTrend.slice(0, lim).map((w) => [
+            data.wordTrend.map((w) => [
               { label: '날짜', el: w.date },
               { label: '범위', el: w.range || '-', cls: 'wrap-anywhere' },
               { label: '점수', el: `${w.score}점` },
@@ -94,39 +95,61 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
     ));
   }
 
-  // 시험 분석 (유형별 정답률)
+  // 시험 분석 — [모의고사 / 내신] 토글
   const ea = data.examAnalysis;
   if (ea && ((ea.typeAccuracy && ea.typeAccuracy.length) || (ea.mockTrend && ea.mockTrend.length) || (ea.schoolTrend && ea.schoolTrend.length))) {
     const body = h('div', { class: 'section-body' }, h('h3', { class: 'sv-section-title' }, '📈 내 시험 분석'));
-    // 목표
     body.appendChild(h('div', { class: 'sv-goals' },
       goalChip('모의 목표', s.mock_goal_type, s.mock_goal_value),
       goalChip('내신 목표', s.exam_goal_type, s.exam_goal_value),
     ));
-    // 모의고사 점수 추이 (막대그래프, 5/10/전체)
+
     const mockScored = (ea.mockTrend || []).filter((e) => e.score != null);
-    if (mockScored.length) {
-      body.appendChild(countViewer({
-        total: mockScored.length, default: 5, title: '모의고사 점수 추이',
-        render: (lim) => renderStudentScoreChart('모의고사 점수 추이', mockScored.slice(-lim), ea.goals && ea.goals.mock),
-      }));
-    }
-    // 내신 점수 추이 (막대그래프, 5/10/전체)
     const schoolScored = (ea.schoolTrend || []).filter((e) => e.score != null);
-    if (schoolScored.length) {
-      body.appendChild(countViewer({
-        total: schoolScored.length, default: 5, title: '내신 점수 추이',
-        render: (lim) => renderStudentScoreChart('내신 점수 추이', schoolScored.slice(-lim), ea.goals && ea.goals.school),
-      }));
-    }
-    // 유형별 강·약점 (막대그래프, 0% 시인성 + 5/10/전체)
     const typeList = (ea.typeAccuracy || []).filter((t) => t.rate !== null);
-    if (typeList.length) {
-      body.appendChild(countViewer({
-        total: typeList.length, default: 5, title: '유형별 강·약점',
-        render: (lim) => typeAccuracyBars(typeList.slice(0, lim)), // 이미 약한 순 정렬 → 앞에서 lim개
-      }));
+
+    let view = 'mock';
+    const tabbar = h('div', { class: 'exam-tabbar' });
+    const panel = h('div', {});
+    function paintTabs() {
+      clear(tabbar);
+      [['mock', '모의고사'], ['school', '내신']].forEach(([key, label]) => {
+        tabbar.appendChild(h('button', { class: 'exam-tab' + (view === key ? ' active' : ''), onClick: () => { view = key; paintPanel(); } }, label));
+      });
     }
+    function paintPanel() {
+      paintTabs();
+      clear(panel);
+      if (view === 'mock') {
+        if (mockScored.length) {
+          panel.appendChild(countViewer({
+            total: mockScored.length, default: 5, title: '모의고사 점수 추이',
+            render: (lim) => renderStudentScoreChart('모의고사 점수 추이', lim === Infinity ? mockScored : mockScored.slice(-lim), ea.goals && ea.goals.mock),
+          }));
+        } else {
+          panel.appendChild(h('div', { class: 'empty' }, '모의고사 점수 기록이 없습니다.'));
+        }
+        // 유형별 강·약점 (전체 막대 + 창 높이 스크롤)
+        if (typeList.length) {
+          panel.appendChild(countViewer({
+            total: typeList.length, default: 5, title: '유형별 강·약점',
+            render: (lim) => typeAccuracyBars(typeList, { scrollRows: lim }), // 전체 막대 + lim 높이 창 스크롤
+          }));
+        }
+      } else {
+        if (schoolScored.length) {
+          panel.appendChild(countViewer({
+            total: schoolScored.length, default: 5, title: '내신 점수 추이',
+            render: (lim) => renderStudentScoreChart('내신 점수 추이', lim === Infinity ? schoolScored : schoolScored.slice(-lim), ea.goals && ea.goals.school),
+          }));
+        } else {
+          panel.appendChild(h('div', { class: 'empty' }, '내신 점수 기록이 없습니다.'));
+        }
+      }
+    }
+    body.appendChild(tabbar);
+    body.appendChild(panel);
+    paintPanel();
     wrap.appendChild(h('div', { class: 'card' }, body));
   }
 
@@ -174,7 +197,7 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
             total: data.inventory.length, default: 5,
             render: (lim) => scrollTable(
               ['상품', '구매일', '상태'],
-              data.inventory.slice(0, lim).map((p) => [
+              data.inventory.map((p) => [
                 { label: '상품', el: p.product_name, cls: 'wrap-anywhere' },
                 { label: '구매일', el: (p.purchased_at || '').slice(0, 10) },
                 { label: '상태', el: h('span', { class: 'pill ' + (p.inventory_state === 'used' ? 'none' : 'present') }, p.inventory_state === 'used' ? '사용완료' : '보유중') },
@@ -195,7 +218,7 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
           total: data.ledger.length, default: 5,
           render: (lim) => scrollTable(
             ['날짜', '내용', 'CP'],
-            data.ledger.slice(0, lim).map((l) => [
+            data.ledger.map((l) => [
               { label: '날짜', el: l.occurred_date },
               { label: '내용', el: l.reason, cls: 'wrap-anywhere' },
               { label: 'CP', el: (l.amount > 0 ? '+' : '') + l.amount, cls: l.amount >= 0 ? 'pos' : 'neg' },

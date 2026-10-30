@@ -913,3 +913,6 @@ table.data tr:hover td { background: #fffaf3; }
   transition: background 0.15s, color 0.15s;
 }
 .cv-chip.active { background: #fff; color: var(--coral-dark); box-shadow: var(--shadow); }
+
+/* 유형별 강약점 막대 영역 내부 스크롤 (헤더/범례는 고정) */
+.tc-scroll { overflow-y: auto; }
