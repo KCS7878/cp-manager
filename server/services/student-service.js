@@ -2,7 +2,7 @@
 import { getDb, transaction } from '../db/connection.js';
 import { nowSeoulStamp } from '../lib/time.js';
 import { uniqueCode } from '../db/migrate.js';
-import { getStudentBalance } from './ledger-service.js';
+import { getStudentBalance, promotePendingToAvailable } from './ledger-service.js';
 import {
   requireString,
   optString,
@@ -53,23 +53,53 @@ export async function listStudents(teacherId, filters = {}) {
     `SELECT s.* FROM students s WHERE ${where.join(' AND ')} ORDER BY s.name`,
     [...params]
   );
+  if (!rows.length) return [];
 
-  const withCp = [];
-  for (const s of rows) {
-    const bal = await getStudentBalance(db, s.id);
-    // 강사 알림용: 학생발 변동(승인 대기 시험 + 구매 희망) 건수
-    const pe = await db.get("SELECT COUNT(*) AS c FROM exams WHERE student_id = ? AND status = 'pending' AND submitted_by = 'student'", [s.id]);
-    const pr = await db.get("SELECT COUNT(*) AS c FROM purchases WHERE student_id = ? AND status = 'requested'", [s.id]);
-    const pendingExams = pe ? Number(pe.c) : 0;
-    const pendingRequests = pr ? Number(pr.c) : 0;
-    withCp.push({
+  // ── N+1 제거: 대기→가용 전환은 1회만, CP/알림 집계는 전체를 한 번에 ──
+  await promotePendingToAvailable(db);
+
+  const ids = rows.map((s) => s.id);
+  const ph = ids.map(() => '?').join(',');
+
+  // CP 집계(가용/대기/누적)를 학생별로 한 쿼리에 (SUM + CASE)
+  const balRows = await db.all(
+    `SELECT student_id,
+       COALESCE(SUM(CASE WHEN status = 'available' THEN amount ELSE 0 END), 0) AS available,
+       COALESCE(SUM(CASE WHEN status = 'pending'   THEN amount ELSE 0 END), 0) AS pending,
+       COALESCE(SUM(CASE WHEN source_type != 'purchase' THEN amount ELSE 0 END), 0) AS cumulative
+     FROM cp_ledger WHERE student_id IN (${ph}) GROUP BY student_id`,
+    [...ids]
+  );
+  const balMap = new Map(balRows.map((r) => [r.student_id, r]));
+
+  // 학생발 변동 알림: 승인 대기 시험 / 구매 희망 (각 1쿼리)
+  const examRows = await db.all(
+    `SELECT student_id, COUNT(*) AS c FROM exams
+       WHERE student_id IN (${ph}) AND status = 'pending' AND submitted_by = 'student'
+       GROUP BY student_id`,
+    [...ids]
+  );
+  const examMap = new Map(examRows.map((r) => [r.student_id, Number(r.c)]));
+  const reqRows = await db.all(
+    `SELECT student_id, COUNT(*) AS c FROM purchases
+       WHERE student_id IN (${ph}) AND status = 'requested'
+       GROUP BY student_id`,
+    [...ids]
+  );
+  const reqMap = new Map(reqRows.map((r) => [r.student_id, Number(r.c)]));
+
+  const withCp = rows.map((s) => {
+    const b = balMap.get(s.id) || { available: 0, pending: 0, cumulative: 0 };
+    const pendingExams = examMap.get(s.id) || 0;
+    const pendingRequests = reqMap.get(s.id) || 0;
+    return {
       ...s,
-      available_cp: bal.available, pending_cp: bal.pending, cumulative_cp: bal.cumulative,
+      available_cp: b.available, pending_cp: b.pending, cumulative_cp: b.cumulative,
       pending_exams: pendingExams,
       purchase_requests: pendingRequests,
       pending_total: pendingExams + pendingRequests,
-    });
-  }
+    };
+  });
 
   // 정렬
   if (filters.sort === 'cp_asc') withCp.sort((a, b) => a.available_cp - b.available_cp);
