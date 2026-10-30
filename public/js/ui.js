@@ -40,6 +40,13 @@ export function typeAccuracyBars(typeAccuracy, opts = {}) {
       h('div', { class: 'tc-pct' }, `${pct}%`),
     );
   });
+  // opts.scrollRows: 지정 시 막대 영역을 그 행 수 높이 창으로 스크롤(헤더/범례 고정). Infinity 면 스크롤 없음.
+  let barsArea;
+  if (opts.scrollRows && opts.scrollRows !== Infinity && list.length > opts.scrollRows) {
+    barsArea = h('div', { class: 'tc-scroll', style: { maxHeight: (opts.scrollRows * 29) + 'px' } }, ...bars);
+  } else {
+    barsArea = h('div', {}, ...bars);
+  }
   return h('div', { class: 'word-chart', style: { marginTop: '0.6rem' } },
     h('div', { class: 'wc-head' },
       h('strong', {}, opts.title || '유형별 강·약점 (정답률)'),
@@ -49,7 +56,7 @@ export function typeAccuracyBars(typeAccuracy, opts = {}) {
         h('span', { class: 'wc-dot bar-green' }), '강함'),
     ),
     h('div', { class: 'hint', style: { margin: '0 0 0.5rem' } }, opts.hint || '위에서부터 정답률이 낮은(먼저 보강할) 유형입니다.'),
-    ...bars,
+    barsArea,
   );
 }
 
@@ -111,8 +118,8 @@ export function countViewer({ total, render, default: def = 5, title = '' }) {
   if (total > 10) options.push(10);
   // 전체 옵션은 5개 초과일 때만 의미 있음
   const showControl = total > 5;
-  let limit = Math.min(def, total);
-  if (!showControl) limit = total; // 5개 이하면 컨트롤 없이 전체
+  // limit 은 '창 높이(표시 행 수)' 의미. 전체는 Infinity.
+  let limit = showControl ? def : Infinity;
 
   const body = h('div', {});
   const controls = h('div', { class: 'count-viewer-bar' });
@@ -122,8 +129,8 @@ export function countViewer({ total, render, default: def = 5, title = '' }) {
     if (title) controls.appendChild(h('span', { class: 'cv-title' }, title));
     const chips = h('div', { class: 'cv-chips' });
     const mk = (val, label) => {
-      const active = (val === Infinity ? limit >= total : limit === val);
-      return h('button', { class: 'cv-chip' + (active ? ' active' : ''), onClick: () => { limit = val === Infinity ? total : val; redraw(); } }, label);
+      const active = limit === val;
+      return h('button', { class: 'cv-chip' + (active ? ' active' : ''), onClick: () => { limit = val; redraw(); } }, label);
     };
     if (total > 5) chips.appendChild(mk(5, '5개'));
     if (total > 10) chips.appendChild(mk(10, '10개'));
