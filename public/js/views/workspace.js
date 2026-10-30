@@ -148,7 +148,10 @@ function renderSidebar(sidebar, detailPane, App) {
       },
         h('div', { class: 'si-avatar', style: { background: t.color || '#ee735a' } }, (s.name || '?').slice(0, 1)),
         h('div', { class: 'si-body' },
-          h('div', { class: 's-name wrap-anywhere' }, s.name),
+          h('div', { class: 's-name-row' },
+            h('div', { class: 's-name wrap-anywhere' }, s.name),
+            s.pending_total > 0 ? h('span', { class: 'si-badge', title: `확인할 학생 요청 ${s.pending_total}건 (점수 제출/구매 희망)` }, String(s.pending_total)) : null,
+          ),
           h('div', { class: 's-meta wrap-anywhere' }, meta)
         )
       ));

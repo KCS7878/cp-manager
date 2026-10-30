@@ -150,6 +150,11 @@ router.post('/api/upload', async (ctx) => ({ url: await uploadSvc.saveImageDataU
 router.post('/api/students/:id/purchase', async (ctx) => ({ purchase: await shopSvc.purchase(num(ctx.params.id), num(ctx.body.product_id)) }));
 router.get('/api/teachers/:id/purchases', async (ctx) =>
   ({ purchases: await shopSvc.listPurchases(num(ctx.params.id), ctx.query.student_id ? num(ctx.query.student_id) : null) }));
+// 구매 희망: 학생 요청 / 목록 / 강사 승인·거절
+router.post('/api/students/:id/purchase/request', async (ctx) => ({ request: await shopSvc.requestPurchase(num(ctx.params.id), num(ctx.body.product_id)) }));
+router.get('/api/students/:id/purchase-requests', async (ctx) => ({ requests: await shopSvc.listPurchaseRequests(null, num(ctx.params.id)) }));
+router.post('/api/purchases/:id/approve', async (ctx) => ({ purchase: await shopSvc.approvePurchaseRequest(num(ctx.params.id)) }));
+router.post('/api/purchases/:id/reject', async (ctx) => shopSvc.rejectPurchaseRequest(num(ctx.params.id)));
 router.get('/api/students/:id/inventory', async (ctx) => ({ inventory: await shopSvc.listInventory(num(ctx.params.id)) }));
 router.put('/api/purchases/:id/state', async (ctx) => ({ purchase: await shopSvc.setInventoryState(num(ctx.params.id), ctx.body.state) }));
 router.delete('/api/purchases/:id', async (ctx) => shopSvc.refundPurchase(num(ctx.params.id)));

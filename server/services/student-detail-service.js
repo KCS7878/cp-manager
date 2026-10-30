@@ -6,7 +6,7 @@ import { getLedger } from './ledger-service.js';
 import { listLessons } from './lesson-service.js';
 import { listExams, analyzeExams } from './exam-service.js';
 import { listMonthlyBonuses } from './bonus-service.js';
-import { listInventory } from './shop-service.js';
+import { listInventory, listPurchaseRequests } from './shop-service.js';
 import { getStudentOverride, getEffectiveRules } from './rules-service.js';
 
 export async function getStudentDetail(studentId) {
@@ -22,5 +22,6 @@ export async function getStudentDetail(studentId) {
     examAnalysis: await analyzeExams(studentId),
     monthlyBonuses: await listMonthlyBonuses(studentId),
     inventory: await listInventory(studentId),
+    purchaseRequests: await listPurchaseRequests(null, studentId), // 학생 구매 희망(승인 대기)
   };
 }
