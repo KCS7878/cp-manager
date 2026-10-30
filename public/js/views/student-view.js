@@ -1,5 +1,5 @@
 // 학생 읽기 전용 화면. 편집 기능 없음.
-import { h, clear, toast, loadingEl, errorEl, openModal, modalShell, confirmDialog } from '../ui.js';
+import { h, clear, toast, loadingEl, errorEl, openModal, modalShell, confirmDialog, typeAccuracyBars, countViewer } from '../ui.js';
 import { api } from '../api.js';
 
 export async function renderStudentView(root, studentId, { onExit } = {}) {
@@ -77,17 +77,19 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
     wrap.appendChild(h('div', { class: 'card' },
       h('div', { class: 'section-body' },
         h('h3', { class: 'sv-section-title' }, '📚 내 단어시험 기록'),
-        h('div', { class: 'table-scroll' },
-          h('table', { class: 'data' },
-            h('thead', {}, h('tr', {}, h('th', {}, '날짜'), h('th', {}, '범위'), h('th', {}, '점수'), h('th', {}, '기한'))),
-            h('tbody', {}, ...data.wordTrend.map((w) => h('tr', {},
-              h('td', {}, w.date),
-              h('td', { class: 'wrap-anywhere' }, w.range || '-'),
-              h('td', {}, `${w.score}점`),
-              h('td', {}, w.deadlineMet ? h('span', { class: 'pos' }, '내') : h('span', { class: 'neg' }, '초과')),
-            ))),
-          )
-        )
+        countViewer({
+          total: data.wordTrend.length, default: 5,
+          render: (lim) => scrollTable(
+            ['날짜', '범위', '점수', '기한'],
+            data.wordTrend.slice(0, lim).map((w) => [
+              { label: '날짜', el: w.date },
+              { label: '범위', el: w.range || '-', cls: 'wrap-anywhere' },
+              { label: '점수', el: `${w.score}점` },
+              { label: '기한', el: w.deadlineMet ? h('span', { class: 'pos' }, '내') : h('span', { class: 'neg' }, '초과') },
+            ]),
+            lim,
+          ),
+        })
       )
     ));
   }
@@ -101,16 +103,29 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
       goalChip('모의 목표', s.mock_goal_type, s.mock_goal_value),
       goalChip('내신 목표', s.exam_goal_type, s.exam_goal_value),
     ));
-    if (ea.typeAccuracy && ea.typeAccuracy.length) {
-      body.appendChild(h('div', { class: 'table-scroll', style: { marginTop: '0.6rem' } },
-        h('table', { class: 'data' },
-          h('thead', {}, h('tr', {}, h('th', {}, '유형'), h('th', {}, '정답/전체'), h('th', {}, '정답률'))),
-          h('tbody', {}, ...ea.typeAccuracy.map((t) => h('tr', {},
-            h('td', {}, t.type), h('td', {}, `${t.correct}/${t.total}`),
-            h('td', { class: t.rate !== null && t.rate < 60 ? 'neg' : 'pos' }, t.rate !== null ? `${t.rate}%` : '-'),
-          ))),
-        )
-      ));
+    // 모의고사 점수 추이 (막대그래프, 5/10/전체)
+    const mockScored = (ea.mockTrend || []).filter((e) => e.score != null);
+    if (mockScored.length) {
+      body.appendChild(countViewer({
+        total: mockScored.length, default: 5, title: '모의고사 점수 추이',
+        render: (lim) => renderStudentScoreChart('모의고사 점수 추이', mockScored.slice(-lim), ea.goals && ea.goals.mock),
+      }));
+    }
+    // 내신 점수 추이 (막대그래프, 5/10/전체)
+    const schoolScored = (ea.schoolTrend || []).filter((e) => e.score != null);
+    if (schoolScored.length) {
+      body.appendChild(countViewer({
+        total: schoolScored.length, default: 5, title: '내신 점수 추이',
+        render: (lim) => renderStudentScoreChart('내신 점수 추이', schoolScored.slice(-lim), ea.goals && ea.goals.school),
+      }));
+    }
+    // 유형별 강·약점 (막대그래프, 0% 시인성 + 5/10/전체)
+    const typeList = (ea.typeAccuracy || []).filter((t) => t.rate !== null);
+    if (typeList.length) {
+      body.appendChild(countViewer({
+        total: typeList.length, default: 5, title: '유형별 강·약점',
+        render: (lim) => typeAccuracyBars(typeList.slice(0, lim)), // 이미 약한 순 정렬 → 앞에서 lim개
+      }));
     }
     wrap.appendChild(h('div', { class: 'card' }, body));
   }
@@ -155,16 +170,18 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
     h('div', { class: 'section-body' },
       h('h3', { class: 'sv-section-title' }, '🎒 내 보유 상품'),
       data.inventory && data.inventory.length
-        ? h('div', { class: 'table-scroll' },
-            h('table', { class: 'data' },
-              h('thead', {}, h('tr', {}, h('th', {}, '상품'), h('th', {}, '구매일'), h('th', {}, '상태'))),
-              h('tbody', {}, ...data.inventory.map((p) => h('tr', {},
-                h('td', { class: 'wrap-anywhere' }, p.product_name),
-                h('td', {}, (p.purchased_at || '').slice(0, 10)),
-                h('td', {}, h('span', { class: 'pill ' + (p.inventory_state === 'used' ? 'none' : 'present') }, p.inventory_state === 'used' ? '사용완료' : '보유중')),
-              ))),
-            )
-          )
+        ? countViewer({
+            total: data.inventory.length, default: 5,
+            render: (lim) => scrollTable(
+              ['상품', '구매일', '상태'],
+              data.inventory.slice(0, lim).map((p) => [
+                { label: '상품', el: p.product_name, cls: 'wrap-anywhere' },
+                { label: '구매일', el: (p.purchased_at || '').slice(0, 10) },
+                { label: '상태', el: h('span', { class: 'pill ' + (p.inventory_state === 'used' ? 'none' : 'present') }, p.inventory_state === 'used' ? '사용완료' : '보유중') },
+              ]),
+              lim,
+            ),
+          })
         : h('div', { class: 'empty' }, '아직 구매한 상품이 없어요. CP를 모아 상점에서 교환해 보세요!'),
     )
   ));
@@ -174,16 +191,18 @@ export async function renderStudentView(root, studentId, { onExit } = {}) {
     wrap.appendChild(h('div', { class: 'card' },
       h('div', { class: 'section-body' },
         h('h3', { class: 'sv-section-title' }, '📒 내 CP 받은 내역'),
-        h('div', { class: 'table-scroll' },
-          h('table', { class: 'data' },
-            h('thead', {}, h('tr', {}, h('th', {}, '날짜'), h('th', {}, '내용'), h('th', {}, 'CP'))),
-            h('tbody', {}, ...data.ledger.slice(0, 20).map((l) => h('tr', {},
-              h('td', {}, l.occurred_date),
-              h('td', { class: 'wrap-anywhere' }, l.reason),
-              h('td', { class: l.amount >= 0 ? 'pos' : 'neg' }, (l.amount > 0 ? '+' : '') + l.amount),
-            ))),
-          )
-        ),
+        countViewer({
+          total: data.ledger.length, default: 5,
+          render: (lim) => scrollTable(
+            ['날짜', '내용', 'CP'],
+            data.ledger.slice(0, lim).map((l) => [
+              { label: '날짜', el: l.occurred_date },
+              { label: '내용', el: l.reason, cls: 'wrap-anywhere' },
+              { label: 'CP', el: (l.amount > 0 ? '+' : '') + l.amount, cls: l.amount >= 0 ? 'pos' : 'neg' },
+            ]),
+            lim,
+          ),
+        }),
       )
     ));
   }
@@ -359,6 +378,52 @@ async function requestPurchase(studentId, product, affordable, reload) {
     toast('구매 희망이 선생님께 전달되었습니다.', 'success');
     reload();
   } catch (e) { toast(e.message, 'error'); }
+}
+
+// 점수 추이 막대그래프 (내신/모의). trend: 과거→현재 [{date,score,...}]
+const SV_PLOT_PX = 150;
+const SV_BAR_MAX = 110;
+const SV_LABEL_PX = 40;
+function renderStudentScoreChart(title, trend, goal) {
+  // trend 는 호출측(countViewer)에서 이미 개수 제한됨
+  const scored = (trend || []).filter((e) => e.score != null);
+  if (!scored.length) return h('div', { class: 'empty' }, '기록이 없습니다.');
+  const hasGoal = goal && goal.type === 'score' && goal.value;
+  const goalVal = hasGoal ? Number(goal.value) : null;
+  const bars = scored.map((e) => {
+    const score = Number(e.score) || 0;
+    const cls = hasGoal ? (score >= goalVal ? 'bar-green' : 'bar-orange') : 'bar-navy';
+    const barPx = Math.max(10, Math.round((score / 100) * SV_BAR_MAX));
+    return h('div', { class: 'wc-col', title: `${e.date} · ${score}점` },
+      h('div', { class: `wc-bar ${cls}`, style: { height: barPx + 'px' } }),
+      h('div', { class: 'wc-val' }, String(score)),
+      h('div', { class: 'wc-date' }, (e.date || '').slice(5)));
+  });
+  const legend = hasGoal
+    ? h('span', { class: 'wc-legend' }, h('span', { class: 'wc-dot bar-green' }), '목표 달성 ', h('span', { class: 'wc-dot bar-orange' }), '목표 미달')
+    : h('span', { class: 'wc-legend' }, '목표 미설정');
+  const passline = hasGoal
+    ? h('div', { class: 'wc-passline ex-goalline', style: { bottom: (Math.round((goalVal / 100) * SV_BAR_MAX) + SV_LABEL_PX) + 'px' } })
+    : null;
+  return h('div', { class: 'word-chart', style: { marginTop: '0.6rem' } },
+    h('div', { class: 'wc-head' }, h('strong', {}, title), legend),
+    h('div', { class: 'wc-plot', style: { height: SV_PLOT_PX + 'px' } }, passline, ...bars));
+}
+
+// 카드형 + (5/10개면) 내부 스크롤 표. headers: string[], rows: cell[][]
+// cell = { label, el, cls }. limit 이 10 이하면 스크롤 높이 제한 클래스 적용.
+function scrollTable(headers, rows, limit) {
+  const scrollCls = (limit <= 5) ? 'table-scroll rows-scroll-5'
+    : (limit <= 10) ? 'table-scroll rows-scroll-10'
+    : 'table-scroll';
+  return h('div', { class: 'card-table' }, h('div', { class: scrollCls },
+    h('table', { class: 'data' },
+      h('thead', {}, h('tr', {}, ...headers.map((hd) => h('th', {}, hd)))),
+      h('tbody', {}, ...rows.map((cells) => h('tr', {},
+        ...cells.map((c) => h('td', { 'data-label': c.label, class: c.cls || '' }, c.el)),
+      ))),
+    )
+  ));
 }
 
 function todaySeoul() { return new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10); }
